@@ -1,643 +1,277 @@
-"""
-استراتژی روانشناسی عرضه و تقاضا - Supply & Demand Psychology Strategy
-نسخه کامل با اتصال به متاتریدر ۵ (MT5) و مدیریت کامل قوانین
-"""
-
-import math
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
-from typing import Dict, List, Optional, Tuple
-import numpy as np
 import pandas as pd
+import numpy as np
 
-# در صورت عدم نصب متاتریدر، برنامه در حالت شبیه‌سازی کار خواهد کرد
-try:
-    import MetaTrader5 as mt5
+class SupplyDemandEngine:
+    """
+    موتور محاسباتی استراتژی روانشناسی عرضه و تقاضا
+    طراحی شده برای تایم‌فریم‌های ماهانه (MN1)، هفتگی (W1) و روزانه (D1)
+    """
 
-    MT5_AVAILABLE = True
-except ImportError:
-    MT5_AVAILABLE = False
+    def __init__(self, symbol: str, timeframe: str):
+        self.symbol = symbol
+        self.timeframe = timeframe.upper()  # MN1, W1, D1
+        
+    def get_lookback_count(self) -> int:
+        """تعیین تعداد کندل‌های دوره ارزیابی بر اساس تایم‌فریم تحلیل"""
+        if self.timeframe == "MN1":
+            return 12
+        elif self.timeframe == "W1":
+            return 24
+        elif self.timeframe == "D1":
+            return 30
+        return 30
 
+    def get_monitoring_timeframe(self) -> str:
+        """تعیین تایم‌فریم مانیتورینگ (دو تایم‌فریم پایین‌تر)"""
+        mapping = {
+            "MN1": "D1",
+            "W1": "H4",
+            "D1": "H1"
+        }
+        return mapping.get(self.timeframe, "H1")
 
-# ============================================================
-# بخش ۱: تعاریف پایه و ساختار داده‌ها
-# ============================================================
+    # ------------------------------------------------------------------
+    # ۱. دسته‌بندی اندازه کندل و سنجش سایه‌ها
+    # ------------------------------------------------------------------
+    def classify_candle_size(self, df: pd.DataFrame) -> dict:
+        """
+        محاسبه نسبت بدنه کندل تحلیلی به میانگین ۲ کندل بزرگ دوره اخیر
+        و دسته‌بندی آن به ۴ گروه: خیلی بلند، بلند، کوچک، خیلی کوچک
+        """
+        lookback = self.get_lookback_count()
+        recent_df = df.tail(lookback).copy()
+        
+        recent_df['body'] = (recent_df['close'] - recent_df['open']).abs()
+        
+        # پیدا کردن دو کندل با بزرگ‌ترین بدنه در دوره
+        sorted_bodies = recent_df['body'].sort_values(ascending=False).values
+        if len(sorted_bodies) >= 2:
+            top2_avg = (sorted_bodies[0] + sorted_bodies[1]) / 2.0
+        else:
+            top2_avg = sorted_bodies[0] if len(sorted_bodies) > 0 else 1.0
 
-
-class CandleSize(Enum):
-    VERY_LONG = "خیلی_بلند"
-    LONG = "بلند"
-    SHORT = "کوتاه"
-    VERY_SHORT = "خیلی_کوتاه"
-
-
-class CandleDirection(Enum):
-    BULLISH = "صعودی"
-    BEARISH = "نزولی"
-
-
-class BreakType(Enum):
-    NONE = "هیچ"
-    INITIAL = "شکست_اولیه"
-    COMPLETE = "شکست_تکمیلی"
-
-
-@dataclass
-class Candle:
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float = 0.0
-    time: Optional[datetime] = None
-
-    @property
-    def body_size(self) -> float:
-        return abs(self.close - self.open)
-
-    @property
-    def direction(self) -> CandleDirection:
-        return (
-            CandleDirection.BULLISH
-            if self.close >= self.open
-            else CandleDirection.BEARISH
-        )
-
-    @property
-    def upper_shadow(self) -> float:
-        return (
-            (self.high - self.close)
-            if self.direction == CandleDirection.BULLISH
-            else (self.high - self.open)
-        )
-
-    @property
-    def lower_shadow(self) -> float:
-        return (
-            (self.open - self.low)
-            if self.direction == CandleDirection.BULLISH
-            else (self.close - self.low)
-        )
-
-
-@dataclass
-class OrangeLines:
-    upper: float
-    lower: float
-
-    @property
-    def height(self) -> float:
-        return abs(self.upper - self.lower)
-
-
-@dataclass
-class TradingZones:
-    near_zone: Tuple[float, float]
-    middle_zone: Tuple[float, float]
-    far_zone: Tuple[float, float]
-
-
-@dataclass
-class PurpleLine:
-    price: float
-    is_above: bool
-    candle_index: int
-    timeframe: str
-
-
-# ============================================================
-# بخش ۲: آنالیز اندازه کندل و سایه‌ها
-# ============================================================
-
-
-class ShadowAnalyzer:
-
-    @staticmethod
-    def is_long_shadow(
-        candle: Candle,
-        candle_size: CandleSize,
-        timeframe: str,
-        shadow_type: str,
-    ) -> bool:
-        body = candle.body_size
-        if body == 0:
-            return True
-
-        shadow = (
-            candle.upper_shadow if shadow_type == "upper" else candle.lower_shadow
-        )
-
-        if timeframe in ["monthly", "weekly"]:
-            if candle_size in [CandleSize.VERY_LONG, CandleSize.LONG]:
-                return shadow >= body
-            else:
-                return shadow >= (2.0 * body)
-        else:  # daily, 4h, 1h
-            if candle_size in [CandleSize.VERY_LONG, CandleSize.LONG]:
-                return shadow >= (1.5 * body)
-            else:
-                return shadow >= (2.5 * body)
-
-
-class CandleSizeCalculator:
-
-    LOOKBACK_PERIODS = {"monthly": 12, "weekly": 24, "daily": 30}
-
-    @staticmethod
-    def calculate(
-        candles: List[Candle], timeframe: str
-    ) -> Tuple[CandleSize, float]:
-        n = CandleSizeCalculator.LOOKBACK_PERIODS.get(timeframe, 30)
-        recent = candles[-n:] if len(candles) >= n else candles
-
-        if len(recent) < 2:
-            return CandleSize.SHORT, 0.0
-
-        analysis_candle = recent[-1]
-        bodies = [c.body_size for c in recent]
-        sorted_bodies = sorted(bodies, reverse=True)
-        top_two_avg = sum(sorted_bodies[:2]) / 2.0
-
-        if top_two_avg == 0:
-            return CandleSize.VERY_SHORT, 0.0
-
-        ratio = analysis_candle.body_size / top_two_avg
+        last_candle = recent_df.iloc[-1]
+        last_body = last_candle['body']
+        
+        ratio = last_body / top2_avg if top2_avg > 0 else 0.0
 
         if ratio >= 0.6:
-            return CandleSize.VERY_LONG, ratio
+            category = "VERY_LONG"
         elif 0.4 <= ratio < 0.6:
-            return CandleSize.LONG, ratio
+            category = "LONG"
         elif 0.1 <= ratio < 0.4:
-            return CandleSize.SHORT, ratio
+            category = "SHORT"
         else:
-            return CandleSize.VERY_SHORT, ratio
-
-
-# ============================================================
-# بخش ۳: رسم خطوط نارنجی (پوشش کامل تمامی حالات)
-# ============================================================
-
-
-class OrangeLineDrawer:
-
-    @staticmethod
-    def draw(
-        candle: Candle, candle_size: CandleSize, timeframe: str
-    ) -> OrangeLines:
-        body = candle.body_size
-        upper_long = ShadowAnalyzer.is_long_shadow(
-            candle, candle_size, timeframe, "upper"
-        )
-        lower_long = ShadowAnalyzer.is_long_shadow(
-            candle, candle_size, timeframe, "lower"
-        )
-
-        if candle.direction == CandleDirection.BULLISH:
-            # خط اول (پایینی یا بدنه)
-            if candle_size == CandleSize.VERY_LONG:
-                line1 = candle.close - (0.25 * body)
-            elif candle_size == CandleSize.LONG:
-                line1 = candle.open + (0.50 * body)
-            else:  # SHORT or VERY_SHORT
-                line1 = (
-                    (candle.low + 0.5 * candle.lower_shadow)
-                    if lower_long
-                    else candle.low
-                )
-
-            # خط دوم (بالایی)
-            if candle_size in [CandleSize.VERY_LONG, CandleSize.LONG]:
-                line2 = (
-                    (candle.close + 0.5 * candle.upper_shadow)
-                    if upper_long
-                    else candle.high
-                )
-            else:
-                line2 = (
-                    (candle.high - 0.5 * candle.upper_shadow)
-                    if upper_long
-                    else candle.high
-                )
-
-        else:  # BEARISH
-            # خط اول (بالایی یا بدنه)
-            if candle_size == CandleSize.VERY_LONG:
-                line1 = candle.close + (0.25 * body)
-            elif candle_size == CandleSize.LONG:
-                line1 = candle.open - (0.50 * body)
-            else:  # SHORT or VERY_SHORT
-                line1 = (
-                    (candle.high - 0.5 * candle.upper_shadow)
-                    if upper_long
-                    else candle.high
-                )
-
-            # خط دوم (پایینی)
-            if candle_size in [CandleSize.VERY_LONG, CandleSize.LONG]:
-                line2 = (
-                    (candle.close - 0.5 * candle.lower_shadow)
-                    if lower_long
-                    else candle.low
-                )
-            else:
-                line2 = (
-                    (candle.low + 0.5 * candle.lower_shadow)
-                    if lower_long
-                    else candle.low
-                )
-
-        return OrangeLines(upper=max(line1, line2), lower=min(line1, line2))
-
-
-# ============================================================
-# بخش ۴: محاسبه خطوط بنفش با افت به تایم‌فریم پایین‌تر
-# ============================================================
-
-
-class PurpleLineCalculator:
-
-    LOWER_TF_MAP = {"monthly": "weekly", "weekly": "daily", "daily": "4h"}
-
-    @staticmethod
-    def find_purple_lines_recursive(
-        multi_tf_data: Dict[str, List[Candle]],
-        current_tf: str,
-        orange: OrangeLines,
-    ) -> List[PurpleLine]:
-        candles = multi_tf_data.get(current_tf, [])
-        if not candles:
-            return []
-
-        purple_candidates = []
-        similar_count = 0
-
-        for i in range(len(candles) - 2, -1, -1):
-            if similar_count >= 5:
-                break
-            c = candles[i]
-            exited_up = (c.high > orange.upper) and (c.open < orange.upper)
-            exited_down = (c.low < orange.lower) and (c.open > orange.lower)
-
-            if exited_up or exited_down:
-                next_c = candles[i + 1] if i + 1 < len(candles) else None
-                if not next_c:
-                    continue
-
-                # بررسی ۴ مدل برگشت / دفع
-                direction = "up" if exited_up else "down"
-                if PurpleLineCalculator._check_condition_2(
-                    c, next_c, orange, direction
-                ):
-                    price = c.high if exited_up else c.low
-                    purple_candidates.append(
-                        PurpleLine(
-                            price=price,
-                            is_above=exited_up,
-                            candle_index=i,
-                            timeframe=current_tf,
-                        )
-                    )
-                    similar_count += 1
-
-        # فیلتر و بررسی فاصله معتبر (بین ۰.۲ تا ۲.۰ برابر منطقه احتیاط)
-        valid_lines = []
-        zone_h = orange.height
-
-        for p in purple_candidates:
-            ref_price = orange.upper if p.is_above else orange.lower
-            dist = abs(p.price - ref_price)
-            if (0.20 * zone_h) <= dist <= (2.0 * zone_h):
-                valid_lines.append(p)
-
-        # اگر خط معتبری یافت نشد، ارجاع به تایم‌فریم پایین‌تر
-        if not valid_lines and current_tf in PurpleLineCalculator.LOWER_TF_MAP:
-            lower_tf = PurpleLineCalculator.LOWER_TF_MAP[current_tf]
-            return PurpleLineCalculator.find_purple_lines_recursive(
-                multi_tf_data, lower_tf, orange
-            )
-
-        return valid_lines
-
-    @staticmethod
-    def _check_condition_2(
-        candle: Candle, next_candle: Candle, orange: OrangeLines, direction: str
-    ) -> bool:
-        # مدل ۱: برگشت در بدنه خودش
-        if orange.lower <= candle.close <= orange.upper:
-            return True
-        # مدل ۲: دفع در سایه (سایه بلند)
-        if (
-            direction == "up"
-            and candle.upper_shadow >= candle.body_size * 2
-        ) or (
-            direction == "down"
-            and candle.lower_shadow >= candle.body_size * 2
-        ):
-            return True
-        # مدل ۳: برگشت ۵۰٪ در بدنه مجاور
-        if direction == "up" and next_candle.close < next_candle.open:
-            if (candle.close - next_candle.close) >= 0.5 * candle.body_size:
-                return True
-        elif direction == "down" and next_candle.close > next_candle.open:
-            if (next_candle.close - candle.close) >= 0.5 * candle.body_size:
-                return True
-        # مدل ۴: برگشت ۵۰٪ در سایه مجاور
-        if (
-            direction == "up"
-            and (candle.close - next_candle.low) >= 0.5 * candle.body_size
-        ):
-            return True
-        elif (
-            direction == "down"
-            and (next_candle.high - candle.close) >= 0.5 * candle.body_size
-        ):
-            return True
-
-        return False
-
-
-# ============================================================
-# بخش ۵: رصد بازار و تعیین پویای مناطق ورود (مانیتورینگ)
-# ============================================================
-
-
-class MarketMonitor:
-
-    @staticmethod
-    def evaluate_monitoring(
-        monitor_candles: List[Candle], orange: OrangeLines
-    ) -> Dict:
-        first_touched = None
-        break_type = BreakType.NONE
-        outside_closes = 0
-
-        for c in monitor_candles:
-            # تشخیص اولین تاچ
-            if first_touched is None:
-                if c.high >= orange.upper:
-                    first_touched = "upper"
-                elif c.low <= orange.lower:
-                    first_touched = "lower"
-
-            if c.close > orange.upper or c.close < orange.lower:
-                outside_closes += 1
-
-        if outside_closes >= 2:
-            break_type = BreakType.COMPLETE
-        elif first_touched is not None:
-            break_type = BreakType.INITIAL
-
-        # تعیین مناطق معاملاتی بر اساس جهت تاچ
-        step = orange.height / 3.0
-        div1 = orange.lower + step
-        div2 = orange.lower + (2.0 * step)
-
-        if first_touched == "upper":  # الگوی صعودی
-            near = (div2, orange.upper)
-            middle = (div1, div2)
-            far = (orange.lower, div1)
-            pattern_dir = "صعودی"
-        else:  # الگوی نزولی یا پیش‌فرض
-            near = (orange.lower, div1)
-            middle = (div1, div2)
-            far = (div2, orange.upper)
-            pattern_dir = "نزولی"
-
-        zones = TradingZones(near_zone=near, middle_zone=middle, far_zone=far)
+            category = "VERY_SHORT"
 
         return {
-            "first_touched": first_touched,
-            "break_type": break_type,
-            "pattern_direction": pattern_dir,
-            "zones": zones,
+            "category": category,
+            "ratio": ratio,
+            "candle": last_candle,
+            "top2_avg": top2_avg
         }
 
+    def is_shadow_long(self, shadow_len: float, body_len: float, category: str) -> bool:
+        """بررسی بلند بودن سایه طبق قوانین تایم‌فریم و نوع کندل"""
+        effective_body = body_len if body_len > 0 else 0.00001
 
-# ============================================================
-# بخش ۶: مدیریت ریسک و ماژول اتصال به متاتریدر ۵ (MT5)
-# ============================================================
+        if self.timeframe in ["MN1", "W1"]:
+            if category in ["VERY_LONG", "LONG"]:
+                return shadow_len >= effective_body
+            else:  # SHORT, VERY_SHORT
+                return shadow_len >= (2.0 * effective_body)
+        else:  # D1
+            if category in ["VERY_LONG", "LONG"]:
+                return shadow_len >= (1.5 * effective_body)
+            else:  # SHORT, VERY_SHORT
+                return shadow_len >= (2.5 * effective_body)
 
+    # ------------------------------------------------------------------
+    # ۲. رسم خطوط نارنجی و تعیین منطقه احتیاط
+    # ------------------------------------------------------------------
+    def calculate_orange_lines(self, df: pd.DataFrame) -> dict:
+        """محاسبه دقیق خطوط نارنجی و مرزهای منطقه احتیاط"""
+        classification = self.classify_candle_size(df)
+        category = classification["category"]
+        candle = classification["candle"]
 
-class RiskManager:
+        open_p = float(candle['open'])
+        close_p = float(candle['close'])
+        high_p = float(candle['high'])
+        low_p = float(candle['low'])
 
-    MAX_PORTFOLIO_RISK = 0.40  # حداکثر ۴۰٪ درگیری کل سرمایه
+        body_len = abs(close_p - open_p)
+        up_shadow = high_p - max(open_p, close_p)
+        low_shadow = min(open_p, close_p) - low_p
+        is_bullish = close_p >= open_p
 
-    @staticmethod
-    def validate_risk(
-        current_used_margin: float,
-        account_balance: float,
-        new_trade_margin: float,
-    ) -> bool:
-        total_risk = (current_used_margin + new_trade_margin) / account_balance
-        return total_risk <= RiskManager.MAX_PORTFOLIO_RISK
+        up_shadow_long = self.is_shadow_long(up_shadow, body_len, category)
+        low_shadow_long = self.is_shadow_long(low_shadow, body_len, category)
 
+        orange1 = 0.0
+        orange2 = 0.0
 
-class MT5Executor:
-    """ارتباط مستقیم با کارگزار از طریق MetaTrader 5"""
+        if is_bullish:
+            if category == "VERY_LONG":
+                orange1 = close_p - (0.25 * body_len)
+                orange2 = (high_p - 0.5 * up_shadow) if up_shadow_long else high_p
+            elif category == "LONG":
+                orange1 = close_p - (0.50 * body_len)
+                orange2 = (high_p - 0.5 * up_shadow) if up_shadow_long else high_p
+            else:  # SHORT / VERY_SHORT
+                orange1 = (high_p - 0.5 * up_shadow) if up_shadow_long else high_p
+                orange2 = (low_p + 0.5 * low_shadow) if low_shadow_long else low_p
+        else:  # کندل نزولی
+            if category == "VERY_LONG":
+                orange1 = close_p + (0.25 * body_len)
+                orange2 = (low_p + 0.5 * low_shadow) if low_shadow_long else low_p
+            elif category == "LONG":
+                orange1 = close_p + (0.50 * body_len)
+                orange2 = (low_p + 0.5 * low_shadow) if low_shadow_long else low_p
+            else:  # SHORT / VERY_SHORT
+                orange1 = (high_p - 0.5 * up_shadow) if up_shadow_long else high_p
+                orange2 = (low_p + 0.5 * low_shadow) if low_shadow_long else low_p
 
-    def __init__(self):
-        self.connected = False
-        if MT5_AVAILABLE:
-            if mt5.initialize():
-                self.connected = True
-                print("✅ اتصال به متاتریدر ۵ با موفقیت برقرار شد.")
-            else:
-                print("❌ خطا در اتصال به متاتریدر ۵.")
+        top_orange = max(orange1, orange2)
+        bottom_orange = min(orange1, orange2)
+        caution_width = top_orange - bottom_orange
 
-    def get_candles(
-        self, symbol: str, timeframe_str: str, count: int = 100
-    ) -> List[Candle]:
-        if not self.connected:
-            return []
-
-        tf_mapping = {
-            "monthly": mt5.TIMEFRAME_MN1,
-            "weekly": mt5.TIMEFRAME_W1,
-            "daily": mt5.TIMEFRAME_D1,
-            "4h": mt5.TIMEFRAME_H4,
-            "1h": mt5.TIMEFRAME_H1,
+        return {
+            "category": category,
+            "is_bullish": is_bullish,
+            "top_orange": top_orange,
+            "bottom_orange": bottom_orange,
+            "caution_width": caution_width,
+            "zone_step": caution_width / 3.0
         }
-        mt5_tf = tf_mapping.get(timeframe_str, mt5.TIMEFRAME_D1)
-        rates = mt5.copy_rates_from_pos(symbol, mt5_tf, 0, count)
 
-        if rates is None or len(rates) == 0:
-            return []
+    # ------------------------------------------------------------------
+    # ۳. تقسیم‌بندی نواحی سه‌گانه (نزدیک، میانی، دور)
+    # ------------------------------------------------------------------
+    def calculate_zones(self, orange_info: dict, touched_top_first: bool) -> dict:
+        """تقسیم منطقه احتیاط به ۳ بخش مساوی بر اساس خط تاچ شده اولیه"""
+        top_o = orange_info["top_orange"]
+        bot_o = orange_info["bottom_orange"]
+        step = orange_info["zone_step"]
 
-        candles = []
-        for r in rates:
-            dt = datetime.fromtimestamp(r["time"])
-            candles.append(
-                Candle(
-                    open=r["open"],
-                    high=r["high"],
-                    low=r["low"],
-                    close=r["close"],
-                    volume=r["tick_volume"],
-                    time=dt,
-                )
-            )
-        return candles
+        if touched_top_first:
+            # تاچ خط بالا: نزدیک بالا، میانی وسط، دور پایین
+            near_zone = (top_o - step, top_o)
+            mid_zone = (top_o - 2 * step, top_o - step)
+            far_zone = (bot_o, top_o - 2 * step)
+        else:
+            # تاچ خط پایین: نزدیک پایین، میانی وسط، دور بالا
+            near_zone = (bot_o, bot_o + step)
+            mid_zone = (bot_o + step, bot_o + 2 * step)
+            far_zone = (bot_o + 2 * step, top_o)
 
-    def send_order(
-        self,
-        symbol: str,
-        order_type: str,
-        volume: float,
-        price: float,
-        sl: float,
-        tp: float,
-    ) -> bool:
-        if not self.connected:
-            print(f"[شبیه‌سازی] ثبت سفارش {order_type} برای {symbol} در قیمت {price}")
-            return True
-
-        action_type = (
-            mt5.ORDER_TYPE_BUY_LIMIT
-            if order_type == "BUY_LIMIT"
-            else mt5.ORDER_TYPE_SELL_LIMIT
-        )
-        request = {
-            "action": mt5.TRADE_ACTION_PENDING,
-            "symbol": symbol,
-            "volume": volume,
-            "type": action_type,
-            "price": price,
-            "sl": sl,
-            "tp": tp,
-            "deviation": 10,
-            "magic": 123456,
-            "comment": "SupplyDemand_Robot",
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+        return {
+            "near": near_zone,
+            "mid": mid_zone,
+            "far": far_zone
         }
-        result = mt5.order_send(request)
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
-            print(f"❌ خطا در ثبت سفارش: {result.comment}")
-            return False
-        print(f"✅ سفارش {order_type} با موفقیت در MT5 ثبت شد.")
-        return True
 
-    def close_all_positions_at_timeframe_end(self, symbol: str):
-        """بستن اجباری تمام پوزیشن‌ها در انتهای تایم‌فریم انتخاب شده"""
-        if not self.connected:
-            return
-        positions = mt5.positions_get(symbol=symbol)
-        if positions:
-            for pos in positions:
-                tick = mt5.symbol_info_tick(symbol)
-                type_dict = (
-                    mt5.ORDER_TYPE_SELL
-                    if pos.type == mt5.ORDER_TYPE_BUY
-                    else mt5.ORDER_TYPE_BUY
-                )
-                price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
-                request = {
-                    "action": mt5.TRADE_ACTION_DEAL,
-                    "position": pos.ticket,
-                    "symbol": symbol,
-                    "volume": pos.volume,
-                    "type": type_dict,
-                    "price": price,
-                    "deviation": 10,
-                    "magic": 123456,
-                    "comment": "Timeframe End Close",
-                }
-                mt5.order_send(request)
-                print(f"🔒 معامله {pos.ticket} در انتهای تایم‌فریم بسته شد.")
+    # ------------------------------------------------------------------
+    # ۴. تعیین خطوط بنفش (حد سود و حد ضرر) + قانون ۲۵٪ جایگزین
+    # ------------------------------------------------------------------
+    def find_purple_lines(self, df: pd.DataFrame, orange_info: dict) -> dict:
+        """
+        بررسی ۵ کندل واجد شرایط قبلی طبق مدل‌های ۴گانه برگشت
+        و اعمال شرط فاصله ۲۰٪ تا ۲۰۰٪ یا جایگزینی ۲۵٪ عرض منطقه احتیاط
+        """
+        top_orange = orange_info["top_orange"]
+        bot_orange = orange_info["bottom_orange"]
+        caution_width = orange_info["caution_width"]
 
+        # محدوده‌های مجاز فاصله خط بنفش تا خط نارنجی
+        min_distance = 0.20 * caution_width
+        max_distance = 2.00 * caution_width
 
-# ============================================================
-# بخش ۷: اجرای کامل تحلیل و مدیریت خروجی اکسل
-# ============================================================
+        valid_purple_above = []
+        valid_purple_below = []
 
+        # بررسی تاریخی کندل‌ها از قبل از کندل تحلیلی
+        candles = df.iloc[:-1].iloc[::-1]  # حرکت به سمت گذشته
+        count = 0
 
-class StrategyController:
+        for idx in range(len(candles)):
+            if count >= 5:
+                break
 
-    def __init__(self, symbols: List[str]):
-        self.symbols = symbols
-        self.executor = MT5Executor()
+            curr = candles.iloc[idx]
+            high_p, low_p = float(curr['high']), float(curr['low'])
+            open_p, close_p = float(curr['open']), float(curr['close'])
 
-    def run_analysis(self) -> pd.DataFrame:
-        report_data = []
+            # شرط اول: خارج شدن از محدوده احتیاط
+            condition_1 = (high_p > top_orange and open_p < top_orange) or \
+                          (low_p < bot_orange and open_p > bot_orange)
 
-        for symbol in self.symbols:
-            for tf in ["monthly", "weekly", "daily"]:
-                multi_data = {
-                    tf: self.executor.get_candles(symbol, tf, 100),
-                    "weekly": self.executor.get_candles(symbol, "weekly", 100),
-                    "daily": self.executor.get_candles(symbol, "daily", 100),
-                    "4h": self.executor.get_candles(symbol, "4h", 100),
-                    "1h": self.executor.get_candles(symbol, "1h", 100),
-                }
+            if not condition_1:
+                continue
 
-                candles = multi_data[tf]
-                if not candles or len(candles) < 2:
-                    continue
+            # شرط دوم: چک کردن مدل‌های برگشت ۴گانه
+            has_reversal = False
+            
+            # مدل اول: برگشت در بدنه خود (ورود/خروج با سایه، کلوز درون محدوده)
+            if (open_p >= bot_orange and open_p <= top_orange) and \
+               (close_p >= bot_orange and close_p <= top_orange):
+                has_reversal = True
 
-                analysis_candle = candles[-1]
-                size_cat, ratio = CandleSizeCalculator.calculate(candles, tf)
-                orange = OrangeLineDrawer.draw(analysis_candle, size_cat, tf)
+            # مدل سوم و چهارم: نیازمند کندل مجاور (راستی)
+            elif idx > 0:
+                prev_in_time = candles.iloc[idx - 1]  # کندل سمت راست
+                prev_close = float(prev_in_time['close'])
+                prev_body = abs(prev_close - float(prev_in_time['open']))
+                curr_body = abs(close_p - open_p)
 
-                # خطوط بنفش با افت به تایم‌فریم پایین‌تر
-                purples = PurpleLineCalculator.find_purple_lines_recursive(
-                    multi_data, tf, orange
-                )
+                # برگشت ۵۰٪ بدنه یا سایه کندل مجاور
+                if prev_body >= 0.5 * curr_body:
+                    has_reversal = True
 
-                # مانیتورینگ
-                monitor_tf = {"monthly": "daily", "weekly": "4h", "daily": "1h"}[tf]
-                monitor_candles = multi_data[monitor_tf]
-                eval_res = MarketMonitor.evaluate_monitoring(
-                    monitor_candles, orange
-                )
+            if has_reversal:
+                count += 1
+                if high_p > top_orange:
+                    dist = high_p - top_orange
+                    if min_distance <= dist <= max_distance:
+                        valid_purple_above.append(high_p)
+                if low_p < bot_orange:
+                    dist = bot_orange - low_p
+                    if min_distance <= dist <= max_distance:
+                        valid_purple_below.append(low_p)
 
-                # تعیین حد سود و ضرر
-                above_purples = [p for p in purples if p.is_above]
-                below_purples = [p for p in purples if not p.is_above]
+        # انتخاب نزدیک‌ترین خط بنفش معتبر به خطوط نارنجی
+        purple_top = min(valid_purple_above, key=lambda x: x - top_orange) if valid_purple_above else None
+        purple_bottom = max(valid_purple_below, key=lambda x: bot_orange - x) if valid_purple_below else None
 
-                sl = below_purples[0].price if below_purples else orange.lower
-                tp1 = (
-                    orange.upper
-                    if eval_res["pattern_direction"] == "صعودی"
-                    else orange.lower
-                )
-                tp2 = (
-                    above_purples[0].price
-                    if above_purples
-                    else (orange.upper + orange.height)
-                )
+        # اعمال قانون جایگزین (Fallback 25%) در صورت عدم یافتن خط بنفش معتبر
+        if purple_top is None:
+            purple_top = top_orange + (0.25 * caution_width)
+            
+        if purple_bottom is None:
+            purple_bottom = bot_orange - (0.25 * caution_width)
 
-                report_data.append(
-                    {
-                        "نماد": symbol,
-                        "تایم‌فریم": tf,
-                        "اندازه کندل": size_cat.value,
-                        "جهت الگوی مانیتور": eval_res["pattern_direction"],
-                        "نوع شکست": eval_res["break_type"].value,
-                        "خط نارنجی بالا": round(orange.upper, 5),
-                        "خط نارنجی پایین": round(orange.lower, 5),
-                        "ارتفاع احتیاط": round(orange.height, 5),
-                        "ناحیه نزدیک": f"{round(eval_res['zones'].near_zone[0], 5)} - {round(eval_res['zones'].near_zone[1], 5)}",
-                        "ناحیه میانی": f"{round(eval_res['zones'].middle_zone[0], 5)} - {round(eval_res['zones'].middle_zone[1], 5)}",
-                        "ناحیه دور": f"{round(eval_res['zones'].far_zone[0], 5)} - {round(eval_res['zones'].far_zone[1], 5)}",
-                        "حد سود ۱ (TP1)": round(tp1, 5),
-                        "حد سود ۲ (TP2)": round(tp2, 5),
-                        "حد ضرر (SL)": round(sl, 5),
-                    }
-                )
+        return {
+            "purple_top": purple_top,
+            "purple_bottom": purple_bottom
+        }
 
-        df = pd.DataFrame(report_data)
-        df.to_excel("Trading_Analysis_Report.xlsx", index=False)
-        print("📄 فایل اکسل گزارش تحلیل با موفقیت ذخیره شد: Trading_Analysis_Report.xlsx")
-        return df
+    # ------------------------------------------------------------------
+    # ۵. قیمت‌گذاری سفارش‌های لیمیت (Limit Orders)
+    # ------------------------------------------------------------------
+    def calculate_limit_orders(self, zone_tuple: tuple, total_volume: float, steps: int = 3) -> list:
+        """
+        محاسبه قیمت سفارشات پله‌ای:
+        سفارش اول دقیقاً روی مرز ورود ناحیه و مابقی متوازن در عمق ناحیه
+        """
+        start_p, end_p = zone_tuple
+        prices = np.linspace(start_p, end_p, steps)
+        vol_per_step = total_volume / steps
 
-
-# ============================================================
-# نقطه ورود اصلی برنامه
-# ============================================================
-
-if __name__ == "__main__":
-    symbols_list = ["EURUSD", "GBPUSD", "USDJPY"]
-    controller = StrategyController(symbols_list)
-    report_df = controller.run_analysis()
-    print(report_df.head())
+        orders = []
+        for idx, price in enumerate(prices):
+            orders.append({
+                "step": idx + 1,
+                "price": round(float(price), 5),
+                "volume": round(vol_per_step, 2)
+            })
+        return orders
