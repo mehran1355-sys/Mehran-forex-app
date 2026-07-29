@@ -1,3 +1,4 @@
+
 import flet as ft
 
 def main(page: ft.Page):
@@ -48,10 +49,10 @@ def main(page: ft.Page):
         page.update()
 
     calc_button = ft.ElevatedButton(
-        content=ft.Text("محاسبه مستقیم روی گوشی", size=16),
+        text="محاسبه مستقیم روی گوشی",
         style=ft.ButtonStyle(
             color="black",
-            bg_color="amber",
+            bgcolor="amber",
             padding=15
         ),
         on_click=calculate_profit,
