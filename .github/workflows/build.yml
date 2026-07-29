@@ -37,12 +37,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet flet-cli
 
-      - name: Build APK with Retry
+      - name: Build APK
         run: |
-          for i in {1..3}; do flet build apk && break || sleep 5; done
+          flet build apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Mehran-Trader-App
-          path: build/apk/*.apk
+          path: "**/*.apk"
