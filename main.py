@@ -102,13 +102,13 @@ def main(page: ft.Page):
     current_df = None
 
     # ------------------------------------------------------------------
-    # عناصر رابط کاربری (UI Controls)
+    # عناصر رابط کاربری (UI Controls) - استفاده از رشته مستقیم برای جلوگیری از خطای Enum
     # ------------------------------------------------------------------
     symbol_input = ft.TextField(
         label="نماد معاملاتی (مثلاً XAUUSD یا EURUSD)",
         value="XAUUSD",
         width=300,
-        border_color=ft.Colors.GOLD,
+        border_color="gold",
     )
 
     tf_dropdown = ft.Dropdown(
@@ -143,14 +143,14 @@ def main(page: ft.Page):
 
     log_box = ft.Text(
         value="سیستم آماده به کار است. نماد را مشخص کرده و دکمه تحلیل را بزنید.\n",
-        color=ft.Colors.GREEN_300,
+        color="green300",
         size=13,
     )
 
     log_container = ft.Container(
         content=ft.Column([log_box], scroll=ft.ScrollMode.ALWAYS),
-        bgcolor=ft.Colors.BLACK54,
-        border=ft.border.all(1, ft.Colors.GREY_800),
+        bgcolor="black54",
+        border=ft.border.all(1, "grey800"),
         border_radius=8,
         padding=15,
         height=180,
@@ -223,8 +223,8 @@ def main(page: ft.Page):
         }
 
         result_card.controls = [
-            ft.Divider(color=ft.Colors.GOLD),
-            ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.GOLD),
+            ft.Divider(color="gold"),
+            ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight=ft.FontWeight.BOLD, color="gold"),
             ft.Row([
                 ft.Text(f"دسته کندل: {orange_info['category']}"),
                 ft.Text(f"خط نارنجی بالا: {orange_info['top_orange']:.4f}"),
@@ -256,7 +256,7 @@ def main(page: ft.Page):
             return
 
         reporter = StrategyReporter(telegram_bot_token=token, telegram_chat_id=chat_id)
-        
+
         caption = (
             f"🎯 سیگنال استراتژی عرضه و تقاضا\n\n"
             f"🔹 نماد: {current_analysis['symbol']}\n"
@@ -290,7 +290,7 @@ def main(page: ft.Page):
         write_log("اتصال به متاتریدر ۵ برقرار شد. در حال محاسبه و ارسال سفارش‌های لیمیت...")
         engine = SupplyDemandEngine(current_analysis["symbol"], current_analysis["timeframe"])
         orders_plan = engine.calculate_limit_orders(current_analysis["zones"]["near"], total_volume=0.3, steps=3)
-        
+
         res = mt5_engine.place_limit_orders(
             symbol=current_analysis["symbol"],
             order_type="BUY" if current_analysis["is_bullish"] else "SELL",
@@ -322,10 +322,10 @@ def main(page: ft.Page):
     page.add(
         ft.Column([
             ft.Row([
-                ft.Icon(ft.Icons.CANDLESTICK_CHART, color=ft.Colors.GOLD, size=36),
-                ft.Text("Mehran Trader - نرم‌افزار مدیریت عرضه و تقاضا", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GOLD),
+                ft.Icon("candlestick_chart", color="gold", size=36),
+                ft.Text("Mehran Trader - نرم‌افزار مدیریت عرضه و تقاضا", size=18, weight=ft.FontWeight.BOLD, color="gold"),
             ], alignment=ft.MainAxisAlignment.START),
-            ft.Divider(color=ft.Colors.GREY_800),
+            ft.Divider(color="grey800"),
 
             ft.Text("۱. تنظیمات تحلیل نماد", size=15, weight=ft.FontWeight.BOLD),
             ft.Row([symbol_input, tf_dropdown]),
@@ -333,17 +333,17 @@ def main(page: ft.Page):
             ft.Text("۲. تنظیمات تلگرام و مدیریت ریسک", size=15, weight=ft.FontWeight.BOLD),
             ft.Row([bot_token_input, chat_id_input, risk_input]),
 
-            ft.Divider(color=ft.Colors.GREY_800),
+            ft.Divider(color="grey800"),
 
             ft.Row([
-                ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, icon=ft.Icons.ANALYTICS, style=ft.ButtonStyle(color=ft.Colors.BLACK, bg=ft.Colors.GOLD)),
-                ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon=ft.Icons.SEND, style=ft.ButtonStyle(bg=ft.Colors.BLUE_700)),
-                ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action, icon=ft.Icons.PLAY_ARROW, style=ft.ButtonStyle(bg=ft.Colors.GREEN_700)),
-                ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon=ft.Icons.CANCEL, style=ft.ButtonStyle(bg=ft.Colors.RED_700)),
+                ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, icon="analytics", style=ft.ButtonStyle(color="black", bg="gold")),
+                ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon="send", style=ft.ButtonStyle(bg="blue700")),
+                ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action, icon="play_arrow", style=ft.ButtonStyle(bg="green700")),
+                ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon="cancel", style=ft.ButtonStyle(bg="red700")),
             ], wrap=True, spacing=10),
 
             result_card,
-            ft.Divider(color=ft.Colors.GREY_800),
+            ft.Divider(color="grey800"),
             ft.Text("📜 گزارش عملیات و لاگ سیستم:", size=14, weight=ft.FontWeight.BOLD),
             log_container,
         ], spacing=15)
