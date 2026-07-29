@@ -1,5 +1,3 @@
-
-
 import flet as ft
 
 def main(page: ft.Page):
@@ -148,15 +146,27 @@ def main(page: ft.Page):
     )
 
     # ---------------------------------------------------------
-    # ساختاربندی تب‌ها (Tabs Navigation)
+    # ساختاربندی تب‌ها بدون آرگومان text
     # ---------------------------------------------------------
     tabs = ft.Tabs(
         selected_index=0,
         animation_duration=300,
         tabs=[
-            ft.Tab(text="ماشین حساب", icon="calculate", content=tab1_content),
-            ft.Tab(text="استراتژی", icon="analytics", content=tab2_content),
-            ft.Tab(text="تنظیمات", icon="settings", content=tab3_content),
+            ft.Tab(
+                tab_content=ft.Text("ماشین حساب"),
+                icon="calculate",
+                content=tab1_content
+            ),
+            ft.Tab(
+                tab_content=ft.Text("استراتژی"),
+                icon="analytics",
+                content=tab2_content
+            ),
+            ft.Tab(
+                tab_content=ft.Text("تنظیمات"),
+                icon="settings",
+                content=tab3_content
+            ),
         ],
         expand=True
     )
