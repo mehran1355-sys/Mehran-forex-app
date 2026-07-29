@@ -1,7 +1,5 @@
-Mehran Sabbabeh:
 """
 استراتژی روانشناسی عرضه و تقاضا - Supply & Demand Psychology Strategy
-نویسنده: AI Assistant (بر اساس استراتژی Mehran Sababeh)
 نسخه کامل با اتصال به متاتریدر ۵ (MT5) و مدیریت کامل قوانین
 """
 
@@ -166,7 +164,7 @@ class CandleSizeCalculator:
 
         ratio = analysis_candle.body_size / top_two_avg
 
-if ratio >= 0.6:
+        if ratio >= 0.6:
             return CandleSize.VERY_LONG, ratio
         elif 0.4 <= ratio < 0.6:
             return CandleSize.LONG, ratio
@@ -286,7 +284,7 @@ class PurpleLineCalculator:
                 if not next_c:
                     continue
 
-# بررسی ۴ مدل برگشت / دفع
+                # بررسی ۴ مدل برگشت / دفع
                 direction = "up" if exited_up else "down"
                 if PurpleLineCalculator._check_condition_2(
                     c, next_c, orange, direction
@@ -395,7 +393,7 @@ class MarketMonitor:
         div1 = orange.lower + step
         div2 = orange.lower + (2.0 * step)
 
-if first_touched == "upper":  # الگوی صعودی
+        if first_touched == "upper":  # الگوی صعودی
             near = (div2, orange.upper)
             middle = (div1, div2)
             far = (orange.lower, div1)
@@ -438,7 +436,7 @@ class RiskManager:
 class MT5Executor:
     """ارتباط مستقیم با کارگزار از طریق MetaTrader 5"""
 
-    def init(self):
+    def __init__(self):
         self.connected = False
         if MT5_AVAILABLE:
             if mt5.initialize():
@@ -521,8 +519,7 @@ class MT5Executor:
         return True
 
     def close_all_positions_at_timeframe_end(self, symbol: str):
-
-"""بستن اجباری تمام پوزیشن‌ها در انتهای تایم‌فریم انتخاب شده"""
+        """بستن اجباری تمام پوزیشن‌ها در انتهای تایم‌فریم انتخاب شده"""
         if not self.connected:
             return
         positions = mt5.positions_get(symbol=symbol)
@@ -557,7 +554,7 @@ class MT5Executor:
 
 class StrategyController:
 
-    def init(self, symbols: List[str]):
+    def __init__(self, symbols: List[str]):
         self.symbols = symbols
         self.executor = MT5Executor()
 
@@ -618,7 +615,7 @@ class StrategyController:
                         "جهت الگوی مانیتور": eval_res["pattern_direction"],
                         "نوع شکست": eval_res["break_type"].value,
                         "خط نارنجی بالا": round(orange.upper, 5),
-"خط نارنجی پایین": round(orange.lower, 5),
+                        "خط نارنجی پایین": round(orange.lower, 5),
                         "ارتفاع احتیاط": round(orange.height, 5),
                         "ناحیه نزدیک": f"{round(eval_res['zones'].near_zone[0], 5)} - {round(eval_res['zones'].near_zone[1], 5)}",
                         "ناحیه میانی": f"{round(eval_res['zones'].middle_zone[0], 5)} - {round(eval_res['zones'].middle_zone[1], 5)}",
@@ -639,9 +636,8 @@ class StrategyController:
 # نقطه ورود اصلی برنامه
 # ============================================================
 
-if name == "main":
+if __name__ == "__main__":
     symbols_list = ["EURUSD", "GBPUSD", "USDJPY"]
     controller = StrategyController(symbols_list)
     report_df = controller.run_analysis()
     print(report_df.head())
-pip install MetaTrader5 pandas openpyxl numpy
