@@ -108,7 +108,7 @@ def main(page: ft.Page):
         label="نماد معاملاتی (مثلاً XAUUSD یا EURUSD)",
         value="XAUUSD",
         width=300,
-        border_color=ft.colors.GOLD,
+        border_color=ft.Colors.GOLD,
     )
 
     tf_dropdown = ft.Dropdown(
@@ -143,14 +143,14 @@ def main(page: ft.Page):
 
     log_box = ft.Text(
         value="سیستم آماده به کار است. نماد را مشخص کرده و دکمه تحلیل را بزنید.\n",
-        color=ft.colors.GREEN_300,
+        color=ft.Colors.GREEN_300,
         size=13,
     )
 
     log_container = ft.Container(
         content=ft.Column([log_box], scroll=ft.ScrollMode.ALWAYS),
-        bgcolor=ft.colors.BLACK54,
-        border=ft.border.all(1, ft.colors.GREY_800),
+        bgcolor=ft.Colors.BLACK54,
+        border=ft.border.all(1, ft.Colors.GREY_800),
         border_radius=8,
         padding=15,
         height=180,
@@ -223,8 +223,8 @@ def main(page: ft.Page):
         }
 
         result_card.controls = [
-            ft.Divider(color=ft.colors.GOLD),
-            ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight=ft.FontWeight.BOLD, color=ft.colors.GOLD),
+            ft.Divider(color=ft.Colors.GOLD),
+            ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.GOLD),
             ft.Row([
                 ft.Text(f"دسته کندل: {orange_info['category']}"),
                 ft.Text(f"خط نارنجی بالا: {orange_info['top_orange']:.4f}"),
@@ -322,10 +322,10 @@ def main(page: ft.Page):
     page.add(
         ft.Column([
             ft.Row([
-                ft.Icon(ft.icons.CANDLESTICK_CHART, color=ft.colors.GOLD, size=36),
-                ft.Text("Mehran Trader - نرم‌افزار مدیریت عرضه و تقاضا", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GOLD),
+                ft.Icon(ft.Icons.CANDLESTICK_CHART, color=ft.Colors.GOLD, size=36),
+                ft.Text("Mehran Trader - نرم‌افزار مدیریت عرضه و تقاضا", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GOLD),
             ], alignment=ft.MainAxisAlignment.START),
-            ft.Divider(color=ft.colors.GREY_800),
+            ft.Divider(color=ft.Colors.GREY_800),
 
             ft.Text("۱. تنظیمات تحلیل نماد", size=15, weight=ft.FontWeight.BOLD),
             ft.Row([symbol_input, tf_dropdown]),
@@ -333,17 +333,17 @@ def main(page: ft.Page):
             ft.Text("۲. تنظیمات تلگرام و مدیریت ریسک", size=15, weight=ft.FontWeight.BOLD),
             ft.Row([bot_token_input, chat_id_input, risk_input]),
 
-            ft.Divider(color=ft.colors.GREY_800),
+            ft.Divider(color=ft.Colors.GREY_800),
 
             ft.Row([
-                ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, icon=ft.icons.ANALYTICS, style=ft.ButtonStyle(color=ft.colors.BLACK, bg=ft.colors.GOLD)),
-                ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon=ft.icons.SEND, style=ft.ButtonStyle(bg=ft.colors.BLUE_700)),
-                ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action, icon=ft.icons.PLAY_ARROW, style=ft.ButtonStyle(bg=ft.colors.GREEN_700)),
-                ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon=ft.icons.CANCEL, style=ft.ButtonStyle(bg=ft.colors.RED_700)),
+                ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, icon=ft.Icons.ANALYTICS, style=ft.ButtonStyle(color=ft.Colors.BLACK, bg=ft.Colors.GOLD)),
+                ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon=ft.Icons.SEND, style=ft.ButtonStyle(bg=ft.Colors.BLUE_700)),
+                ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action, icon=ft.Icons.PLAY_ARROW, style=ft.ButtonStyle(bg=ft.Colors.GREEN_700)),
+                ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon=ft.Icons.CANCEL, style=ft.ButtonStyle(bg=ft.Colors.RED_700)),
             ], wrap=True, spacing=10),
 
             result_card,
-            ft.Divider(color=ft.colors.GREY_800),
+            ft.Divider(color=ft.Colors.GREY_800),
             ft.Text("📜 گزارش عملیات و لاگ سیستم:", size=14, weight=ft.FontWeight.BOLD),
             log_container,
         ], spacing=15)
