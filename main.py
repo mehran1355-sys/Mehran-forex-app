@@ -49,7 +49,7 @@ def main(page: ft.Page):
         page.update()
 
     calc_button = ft.ElevatedButton(
-        text="محاسبه مستقیم روی گوشی",
+        content=ft.Text("محاسبه مستقیم روی گوشی", size=16),
         style=ft.ButtonStyle(
             color="black",
             bgcolor="amber",
