@@ -7,7 +7,7 @@ def main(page: ft.Page):
     page.scroll = "adaptive"
 
     # ---------------------------------------------------------
-    # تب ۱: ماشین‌حساب و مدیریت ریسک
+    # محتوای تب ۱: ماشین‌حساب و مدیریت ریسک
     # ---------------------------------------------------------
     calc_lot = ft.TextField(
         label="حجم معامله (Lot)",
@@ -35,29 +35,26 @@ def main(page: ft.Page):
             calc_result.color = "amber"
         page.update()
 
-    tab1_content = ft.Container(
-        content=ft.Column(
-            [
-                ft.Text("ماشین‌حساب مدیریت ریسک", size=20, weight="bold", color="amber"),
-                calc_lot,
-                calc_pip,
-                ft.ElevatedButton(
-                    content=ft.Text("محاسبه سود / زیان", size=16),
-                    style=ft.ButtonStyle(color="black", bgcolor="amber", padding=12),
-                    on_click=on_calculate,
-                    width=320
-                ),
-                ft.Divider(height=20, color="transparent"),
-                calc_result
-            ],
-            horizontal_alignment="center",
-            spacing=15
-        ),
-        padding=10
+    tab1_view = ft.Column(
+        [
+            ft.Text("ماشین‌حساب مدیریت ریسک", size=18, weight="bold", color="amber"),
+            calc_lot,
+            calc_pip,
+            ft.ElevatedButton(
+                content=ft.Text("محاسبه سود / زیان", size=16),
+                style=ft.ButtonStyle(color="black", bgcolor="amber", padding=12),
+                on_click=on_calculate,
+                width=320
+            ),
+            ft.Divider(height=15, color="transparent"),
+            calc_result
+        ],
+        horizontal_alignment="center",
+        spacing=12
     )
 
     # ---------------------------------------------------------
-    # تب ۲: استراتژی و سیگنال‌ها
+    # محتوای تب ۲: استراتژی و سیگنال‌ها
     # ---------------------------------------------------------
     body_input = ft.TextField(
         label="طول بدنه کندل",
@@ -71,7 +68,7 @@ def main(page: ft.Page):
         width=320,
         border_color="amber"
     )
-    strategy_result = ft.Text("وضعیت: در انتظار تحلیل ورودی‌ها...", size=15, color="bluegrey200")
+    strategy_result = ft.Text("وضعیت: در انتظار تحلیل...", size=15, color="bluegrey200")
 
     def on_analyze(e):
         try:
@@ -88,29 +85,26 @@ def main(page: ft.Page):
             strategy_result.color = "red"
         page.update()
 
-    tab2_content = ft.Container(
-        content=ft.Column(
-            [
-                ft.Text("تحلیل استراتژی و کندل‌ها", size=20, weight="bold", color="amber"),
-                body_input,
-                shadow_input,
-                ft.ElevatedButton(
-                    content=ft.Text("بررسی شرایط استراتژی", size=16),
-                    style=ft.ButtonStyle(color="black", bgcolor="amber", padding=12),
-                    on_click=on_analyze,
-                    width=320
-                ),
-                ft.Divider(height=20, color="transparent"),
-                strategy_result
-            ],
-            horizontal_alignment="center",
-            spacing=15
-        ),
-        padding=10
+    tab2_view = ft.Column(
+        [
+            ft.Text("تحلیل استراتژی و کندل‌ها", size=18, weight="bold", color="amber"),
+            body_input,
+            shadow_input,
+            ft.ElevatedButton(
+                content=ft.Text("بررسی شرایط استراتژی", size=16),
+                style=ft.ButtonStyle(color="black", bgcolor="amber", padding=12),
+                on_click=on_analyze,
+                width=320
+            ),
+            ft.Divider(height=15, color="transparent"),
+            strategy_result
+        ],
+        horizontal_alignment="center",
+        spacing=12
     )
 
     # ---------------------------------------------------------
-    # تب ۳: تنظیمات
+    # محتوای تب ۳: تنظیمات
     # ---------------------------------------------------------
     max_risk_input = ft.TextField(
         label="سقف ریسک کل معاملات باز (%)",
@@ -125,52 +119,73 @@ def main(page: ft.Page):
         settings_status.value = f"تنظیمات ذخیره شد (حد ریسک کل: {max_risk_input.value}٪)"
         page.update()
 
-    tab3_content = ft.Container(
-        content=ft.Column(
-            [
-                ft.Text("تنظیمات سیستم", size=20, weight="bold", color="amber"),
-                max_risk_input,
-                ft.ElevatedButton(
-                    content=ft.Text("ذخیره تنظیمات", size=16),
-                    style=ft.ButtonStyle(color="black", bgcolor="amber", padding=12),
-                    on_click=on_save_settings,
-                    width=320
-                ),
-                ft.Divider(height=15, color="transparent"),
-                settings_status
-            ],
-            horizontal_alignment="center",
-            spacing=15
-        ),
-        padding=10
-    )
-
-    # ---------------------------------------------------------
-    # ساختاربندی تب‌ها بدون آرگومان text
-    # ---------------------------------------------------------
-    tabs = ft.Tabs(
-        selected_index=0,
-        animation_duration=300,
-        tabs=[
-            ft.Tab(
-                tab_content=ft.Text("ماشین حساب"),
-                icon="calculate",
-                content=tab1_content
+    tab3_view = ft.Column(
+        [
+            ft.Text("تنظیمات سیستم", size=18, weight="bold", color="amber"),
+            max_risk_input,
+            ft.ElevatedButton(
+                content=ft.Text("ذخیره تنظیمات", size=16),
+                style=ft.ButtonStyle(color="black", bgcolor="amber", padding=12),
+                on_click=on_save_settings,
+                width=320
             ),
-            ft.Tab(
-                tab_content=ft.Text("استراتژی"),
-                icon="analytics",
-                content=tab2_content
-            ),
-            ft.Tab(
-                tab_content=ft.Text("تنظیمات"),
-                icon="settings",
-                content=tab3_content
-            ),
+            ft.Divider(height=15, color="transparent"),
+            settings_status
         ],
-        expand=True
+        horizontal_alignment="center",
+        spacing=12
     )
 
-    page.add(tabs)
+    # ---------------------------------------------------------
+    # سیستم نوار ناوبری سفارشی (Custom Tabs)
+    # ---------------------------------------------------------
+    main_container = ft.Container(content=tab1_view, padding=10)
+
+    btn_tab1 = ft.ElevatedButton(
+        content=ft.Text("ماشین‌حساب", size=13),
+        style=ft.ButtonStyle(color="black", bgcolor="amber")
+    )
+    btn_tab2 = ft.ElevatedButton(
+        content=ft.Text("استراتژی", size=13),
+        style=ft.ButtonStyle(color="white", bgcolor="grey800")
+    )
+    btn_tab3 = ft.ElevatedButton(
+        content=ft.Text("تنظیمات", size=13),
+        style=ft.ButtonStyle(color="white", bgcolor="grey800")
+    )
+
+    def switch_tab(tab_num):
+        if tab_num == 1:
+            main_container.content = tab1_view
+            btn_tab1.style = ft.ButtonStyle(color="black", bgcolor="amber")
+            btn_tab2.style = ft.ButtonStyle(color="white", bgcolor="grey800")
+            btn_tab3.style = ft.ButtonStyle(color="white", bgcolor="grey800")
+        elif tab_num == 2:
+            main_container.content = tab2_view
+            btn_tab1.style = ft.ButtonStyle(color="white", bgcolor="grey800")
+            btn_tab2.style = ft.ButtonStyle(color="black", bgcolor="amber")
+            btn_tab3.style = ft.ButtonStyle(color="white", bgcolor="grey800")
+        elif tab_num == 3:
+            main_container.content = tab3_view
+            btn_tab1.style = ft.ButtonStyle(color="white", bgcolor="grey800")
+            btn_tab2.style = ft.ButtonStyle(color="white", bgcolor="grey800")
+            btn_tab3.style = ft.ButtonStyle(color="black", bgcolor="amber")
+        page.update()
+
+    btn_tab1.on_click = lambda e: switch_tab(1)
+    btn_tab2.on_click = lambda e: switch_tab(2)
+    btn_tab3.on_click = lambda e: switch_tab(3)
+
+    nav_row = ft.Row(
+        [btn_tab1, btn_tab2, btn_tab3],
+        alignment="center",
+        spacing=6
+    )
+
+    page.add(
+        nav_row,
+        ft.Divider(height=15, color="amber"),
+        main_container
+    )
 
 ft.app(target=main)
