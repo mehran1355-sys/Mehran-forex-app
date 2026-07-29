@@ -1,7 +1,4 @@
-flet
-pandas
-numpy
-matplotlib
+fle
 requests
-openpyxl
+
 
