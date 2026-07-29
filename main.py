@@ -1,12 +1,86 @@
 import flet as ft
 import datetime
 import random
+import urllib.request
+import urllib.parse
 
-# فراخوانی ماژول‌های اختصاصی پروژه
-from strategy_engine import SupplyDemandEngine
-from reporter_module import StrategyReporter
+# ------------------------------------------------------------------
+# فراخوانی ایمن ماژول‌ها یا استفاده از موتور داخلی مستقل برای اندروید
+# ------------------------------------------------------------------
+try:
+    from strategy_engine import SupplyDemandEngine
+except ImportError:
+    class SupplyDemandEngine:
+        """موتور محاسباتی مستقل داخلی برای اندروید"""
+        def __init__(self, symbol, timeframe):
+            self.symbol = symbol
+            self.timeframe = timeframe
 
-# فراخوانی مشروط متاتریدر جهت جلوگیری از خطا در اندروید
+        def calculate_orange_lines(self, df):
+            closes = df['close']
+            top_o = max(closes) * 1.002
+            bot_o = min(closes) * 0.998
+            return {
+                "category": "دسته A (استاندارد)",
+                "is_bullish": closes[-1] > closes[0],
+                "top_orange": top_o,
+                "bottom_orange": bot_o,
+            }
+
+        def calculate_zones(self, orange_info, touched_top_first=True):
+            top = orange_info["top_orange"]
+            bot = orange_info["bottom_orange"]
+            diff = (top - bot) / 3
+            return {
+                "near": (bot, bot + diff),
+                "mid": (bot + diff, bot + 2 * diff),
+                "far": (bot + 2 * diff, top)
+            }
+
+        def find_purple_lines(self, df, orange_info):
+            top = orange_info["top_orange"]
+            bot = orange_info["bottom_orange"]
+            return {
+                "purple_top": top * 1.01,
+                "purple_bottom": bot * 0.99
+            }
+
+        def get_monitoring_timeframe(self):
+            tf_map = {"MN1": "D1", "W1": "H4", "D1": "H1"}
+            return tf_map.get(self.timeframe, "H1")
+
+        def calculate_limit_orders(self, zone, total_volume=0.3, steps=3):
+            start, end = zone
+            step_size = (end - start) / max(1, steps - 1)
+            vol_per_step = total_volume / steps
+            return [{"price": start + i * step_size, "volume": vol_per_step} for i in range(steps)]
+
+try:
+    from reporter_module import StrategyReporter
+except ImportError:
+    class StrategyReporter:
+        """ماژول ارسال به تلگرام با استاندارد شبکه پایتون بدون نیاز به پکیج خارجی"""
+        def __init__(self, telegram_bot_token, telegram_chat_id):
+            self.token = telegram_bot_token
+            self.chat_id = telegram_chat_id
+
+        def generate_chart(self, df, analysis):
+            return None
+
+        def send_telegram_report(self, chart_path, caption):
+            try:
+                url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+                clean_text = caption.replace("**", "")
+                data = urllib.parse.urlencode({
+                    "chat_id": self.chat_id,
+                    "text": clean_text,
+                }).encode('utf-8')
+                req = urllib.request.Request(url, data=data)
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    return response.status == 200
+            except Exception:
+                return False
+
 try:
     from mt5_execution import MT5ExecutionEngine
 except ImportError:
@@ -30,7 +104,6 @@ def main(page: ft.Page):
     # ------------------------------------------------------------------
     # عناصر رابط کاربری (UI Controls)
     # ------------------------------------------------------------------
-    # ۱. بخش ورودی نماد و تایم‌فریم
     symbol_input = ft.TextField(
         label="نماد معاملاتی (مثلاً XAUUSD یا EURUSD)",
         value="XAUUSD",
@@ -49,7 +122,6 @@ def main(page: ft.Page):
         ],
     )
 
-    # ۲. بخش تنظیمات تلگرام و مدیریت ریسک
     bot_token_input = ft.TextField(
         label="Bot Token تلگرام",
         password=True,
@@ -69,7 +141,6 @@ def main(page: ft.Page):
         keyboard_type=ft.KeyboardType.NUMBER,
     )
 
-    # ۳. باکس نمایش لاگ و خروجی‌ها
     log_box = ft.Text(
         value="سیستم آماده به کار است. نماد را مشخص کرده و دکمه تحلیل را بزنید.\n",
         color=ft.colors.GREEN_300,
@@ -85,21 +156,17 @@ def main(page: ft.Page):
         height=180,
     )
 
-    # کارت‌های نمایش نتایج تحلیل
     result_card = ft.Column(visible=False)
 
     def write_log(message: str, is_error: bool = False):
-        """افزودن پیام به باکس گزارش‌های متنی"""
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         prefix = "❌ " if is_error else "🔹 "
         log_box.value += f"[{timestamp}] {prefix}{message}\n"
         page.update()
 
     # ------------------------------------------------------------------
-    # اکشن‌ها و توابع عملیاتی
+    # اکشن‌ها
     # ------------------------------------------------------------------
-
-    # ۱. تابع اجرای تحلیل
     def run_analysis_action(e):
         nonlocal current_analysis, current_df
         symbol = symbol_input.value.strip().upper()
@@ -111,7 +178,6 @@ def main(page: ft.Page):
 
         write_log(f"شروع تحلیل نماد {symbol} در تایم‌فریم {timeframe}...")
 
-        # تولید داده‌های کندل شبیه‌سازی شده با پایتون خالص (بدون نیاز به pandas و numpy)
         now = datetime.datetime.now()
         dates = [now - datetime.timedelta(days=i) for i in range(100)]
         dates.reverse()
@@ -156,7 +222,6 @@ def main(page: ft.Page):
             "tp1": orange_info["top_orange"] if not orange_info["is_bullish"] else orange_info["bottom_orange"],
         }
 
-        # بروزرسانی کارت نتایج
         result_card.controls = [
             ft.Divider(color=ft.colors.GOLD),
             ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight=ft.FontWeight.BOLD, color=ft.colors.GOLD),
@@ -178,7 +243,6 @@ def main(page: ft.Page):
         write_log("✅ تحلیل با موفقیت انجام شد و خطوط نارنجی، بنفش و زون‌ها محاسبه شدند.")
         page.update()
 
-    # ۲. تابع ارسال به تلگرام
     def send_telegram_action(e):
         if not current_analysis:
             write_log("ابتدا باید تحلیل را انجام دهید.", is_error=True)
@@ -192,25 +256,23 @@ def main(page: ft.Page):
             return
 
         reporter = StrategyReporter(telegram_bot_token=token, telegram_chat_id=chat_id)
-        chart_path = reporter.generate_chart(current_df, current_analysis)
-
+        
         caption = (
-            f"🎯 **سیگنال استراتژی عرضه و تقاضا**\n\n"
-            f"🔹 **نماد:** {current_analysis['symbol']}\n"
-            f"🔹 **تایم‌فریم:** {current_analysis['timeframe']}\n"
-            f"🟧 **خط بالا:** {current_analysis['orange_info']['top_orange']:.4f}\n"
-            f"🟧 **خط پایین:** {current_analysis['orange_info']['bottom_orange']:.4f}\n"
-            f"🟪 **تارگت اصلی:** {current_analysis['purple_lines']['purple_top']:.4f}\n"
-            f"⛔ **حد ضرر:** {current_analysis['purple_lines']['purple_bottom']:.4f}\n"
+            f"🎯 سیگنال استراتژی عرضه و تقاضا\n\n"
+            f"🔹 نماد: {current_analysis['symbol']}\n"
+            f"🔹 تایم‌فریم: {current_analysis['timeframe']}\n"
+            f"🟧 خط بالا: {current_analysis['orange_info']['top_orange']:.4f}\n"
+            f"🟧 خط پایین: {current_analysis['orange_info']['bottom_orange']:.4f}\n"
+            f"🟪 تارگت اصلی: {current_analysis['purple_lines']['purple_top']:.4f}\n"
+            f"⛔ حد ضرر: {current_analysis['purple_lines']['purple_bottom']:.4f}\n"
         )
 
-        success = reporter.send_telegram_report(chart_path, caption)
+        success = reporter.send_telegram_report(None, caption)
         if success:
-            write_log("✈️ چارت تحلیلی و گزارش با موفقیت به تلگرام ارسال شد.")
+            write_log("✈️ گزارش تحلیل با موفقیت به تلگرام ارسال شد.")
         else:
             write_log("خطا در ارسال به تلگرام. توکن یا چت‌آیدی را بررسی کنید.", is_error=True)
 
-    # ۳. تابع اجرای معامله در متاتریدر ۵
     def execute_mt5_action(e):
         if MT5ExecutionEngine is None:
             write_log("⚠️ این بخش مخصوص نسخه ویندوز متصل به متاتریدر ۵ است.", is_error=True)
@@ -245,7 +307,6 @@ def main(page: ft.Page):
 
         mt5_engine.disconnect()
 
-    # ۴. تابع بستن تمام پوزیشن‌ها (Reset)
     def reset_all_action(e):
         if MT5ExecutionEngine is None:
             write_log("⚠️ این بخش مخصوص نسخه ویندوز متصل به متاتریدر ۵ است.", is_error=True)
@@ -256,18 +317,16 @@ def main(page: ft.Page):
         write_log(f"🧹 ریست کامل انجام شد: {res['closed_positions']} پوزیشن بسته و {res['cancelled_orders']} سفارش معلق لغو شدند.")
 
     # ------------------------------------------------------------------
-    # چیدمان عناصر صفحه (Layout Construction)
+    # چیدمان UI
     # ------------------------------------------------------------------
     page.add(
         ft.Column([
-            # هدر برنامه
             ft.Row([
                 ft.Icon(ft.icons.CANDLESTICK_CHART, color=ft.colors.GOLD, size=36),
-                ft.Text("Mehran Trader - نرم‌افزار جامع مدیریت عرضه و تقاضا", size=20, weight=ft.FontWeight.BOLD, color=ft.colors.GOLD),
+                ft.Text("Mehran Trader - نرم‌افزار مدیریت عرضه و تقاضا", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.GOLD),
             ], alignment=ft.MainAxisAlignment.START),
             ft.Divider(color=ft.colors.GREY_800),
 
-            # فرم تنظیمات ورودی
             ft.Text("۱. تنظیمات تحلیل نماد", size=15, weight=ft.FontWeight.BOLD),
             ft.Row([symbol_input, tf_dropdown]),
 
@@ -276,7 +335,6 @@ def main(page: ft.Page):
 
             ft.Divider(color=ft.colors.GREY_800),
 
-            # دکمه‌های عملیاتی
             ft.Row([
                 ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, icon=ft.icons.ANALYTICS, style=ft.ButtonStyle(color=ft.colors.BLACK, bg=ft.colors.GOLD)),
                 ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon=ft.icons.SEND, style=ft.ButtonStyle(bg=ft.colors.BLUE_700)),
@@ -284,7 +342,6 @@ def main(page: ft.Page):
                 ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon=ft.icons.CANCEL, style=ft.ButtonStyle(bg=ft.colors.RED_700)),
             ], wrap=True, spacing=10),
 
-            # نمایش نتایج و باکس لاگ
             result_card,
             ft.Divider(color=ft.colors.GREY_800),
             ft.Text("📜 گزارش عملیات و لاگ سیستم:", size=14, weight=ft.FontWeight.BOLD),
