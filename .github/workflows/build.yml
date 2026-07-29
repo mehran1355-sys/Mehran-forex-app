@@ -39,7 +39,7 @@ jobs:
 
       - name: Build APK
         run: |
-          flet build apk --python-version 3.12 --verbose
+          flet build apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
