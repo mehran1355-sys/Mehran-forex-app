@@ -1,6 +1,6 @@
 import flet as ft
-import pandas as pd
 import datetime
+import random
 
 # فراخوانی ماژول‌های اختصاصی پروژه
 from strategy_engine import SupplyDemandEngine
@@ -111,23 +111,33 @@ def main(page: ft.Page):
 
         write_log(f"شروع تحلیل نماد {symbol} در تایم‌فریم {timeframe}...")
 
-        # ساخت داده‌های فرضی/تستی یا دریافت از دیتابیس در صورت عدم دسترسی به MT5
-        # (برای محیط اندروید داده‌ها به‌صورت استاندارد شبیه‌سازی/دریافت می‌شوند)
-        dates = pd.date_range(end=datetime.datetime.now(), periods=100, freq='D')
-        import numpy as np
-        np.random.seed(42)
-        close_prices = 2000 + np.cumsum(np.random.randn(100) * 5)
-        high_prices = close_prices + np.abs(np.random.randn(100) * 3)
-        low_prices = close_prices - np.abs(np.random.randn(100) * 3)
-        open_prices = low_prices + (high_prices - low_prices) * np.random.rand(100)
+        # تولید داده‌های کندل شبیه‌سازی شده با پایتون خالص (بدون نیاز به pandas و numpy)
+        now = datetime.datetime.now()
+        dates = [now - datetime.timedelta(days=i) for i in range(100)]
+        dates.reverse()
 
-        current_df = pd.DataFrame({
+        close_price = 2000.0
+        open_prices, high_prices, low_prices, close_prices = [], [], [], []
+
+        for _ in range(100):
+            change = random.uniform(-10, 10)
+            close_price += change
+            high = close_price + abs(random.uniform(1, 5))
+            low = close_price - abs(random.uniform(1, 5))
+            open_p = low + (high - low) * random.random()
+
+            open_prices.append(open_p)
+            high_prices.append(high)
+            low_prices.append(low)
+            close_prices.append(close_price)
+
+        current_df = {
             'time': dates,
             'open': open_prices,
             'high': high_prices,
             'low': low_prices,
             'close': close_prices
-        })
+        }
 
         engine = SupplyDemandEngine(symbol, timeframe)
         orange_info = engine.calculate_orange_lines(current_df)
@@ -216,7 +226,6 @@ def main(page: ft.Page):
             return
 
         write_log("اتصال به متاتریدر ۵ برقرار شد. در حال محاسبه و ارسال سفارش‌های لیمیت...")
-        # ساخت نقشه سفارشات پله‌ای و ارسال به متاتریدر
         engine = SupplyDemandEngine(current_analysis["symbol"], current_analysis["timeframe"])
         orders_plan = engine.calculate_limit_orders(current_analysis["zones"]["near"], total_volume=0.3, steps=3)
         
