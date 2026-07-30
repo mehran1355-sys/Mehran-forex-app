@@ -4,6 +4,30 @@ import random
 import urllib.request
 import urllib.parse
 import traceback
+import json
+import os
+
+# ------------------------------------------------------------------
+# سیستم مدیریت فایل تنظیمات بومی پایتون
+# ------------------------------------------------------------------
+SETTINGS_FILE = "mehran_trader_settings.json"
+
+def load_settings():
+    try:
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_settings_to_file(data):
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        return True
+    except Exception:
+        return False
 
 # ------------------------------------------------------------------
 # فراخوانی ایمن ماژول‌ها یا استفاده از موتور داخلی مستقل برای اندروید
@@ -12,7 +36,6 @@ try:
     from strategy_engine import SupplyDemandEngine
 except ImportError:
     class SupplyDemandEngine:
-        """موتور محاسباتی مستقل داخلی برای اندروید"""
         def __init__(self, symbol, timeframe):
             self.symbol = symbol
             self.timeframe = timeframe
@@ -60,7 +83,6 @@ try:
     from reporter_module import StrategyReporter
 except ImportError:
     class StrategyReporter:
-        """ماژول ارسال به تلگرام با استاندارد شبکه پایتون"""
         def __init__(self, telegram_bot_token, telegram_chat_id):
             self.token = telegram_bot_token
             self.chat_id = telegram_chat_id
@@ -101,13 +123,14 @@ def main(page: ft.Page):
         current_df = None
 
         # ------------------------------------------------------------------
-        # بازیابی تنظیمات ذخیره‌شده از حافظه محلی گوشی
+        # بازیابی تنظیمات از فایل متنی
         # ------------------------------------------------------------------
-        saved_symbol = page.client_storage.get("saved_symbol") or "XAUUSD"
-        saved_tf = page.client_storage.get("saved_tf") or "D1"
-        saved_token = page.client_storage.get("saved_token") or ""
-        saved_chat_id = page.client_storage.get("saved_chat_id") or ""
-        saved_risk = page.client_storage.get("saved_risk") or "40"
+        saved_data = load_settings()
+        saved_symbol = saved_data.get("saved_symbol", "XAUUSD")
+        saved_tf = saved_data.get("saved_tf", "D1")
+        saved_token = saved_data.get("saved_token", "")
+        saved_chat_id = saved_data.get("saved_chat_id", "")
+        saved_risk = saved_data.get("saved_risk", "40")
 
         # ------------------------------------------------------------------
         # عناصر ورودی
@@ -172,15 +195,21 @@ def main(page: ft.Page):
             page.update()
 
         # ------------------------------------------------------------------
-        # ذخیره‌سازی تنظیمات در Client Storage
+        # ذخیره‌سازی تنظیمات در فایل JSON
         # ------------------------------------------------------------------
         def save_settings_action(e):
-            page.client_storage.set("saved_symbol", symbol_input.value.strip().upper())
-            page.client_storage.set("saved_tf", tf_dropdown.value)
-            page.client_storage.set("saved_token", bot_token_input.value.strip())
-            page.client_storage.set("saved_chat_id", chat_id_input.value.strip())
-            page.client_storage.set("saved_risk", risk_input.value.strip())
-            write_log("💾 تنظیمات تلگرام و ریسک با موفقیت روی حافظه گوشی ذخیره شدند.")
+            new_data = {
+                "saved_symbol": symbol_input.value.strip().upper(),
+                "saved_tf": tf_dropdown.value,
+                "saved_token": bot_token_input.value.strip(),
+                "saved_chat_id": chat_id_input.value.strip(),
+                "saved_risk": risk_input.value.strip()
+            }
+            success = save_settings_to_file(new_data)
+            if success:
+                write_log("💾 تنظیمات با موفقیت در سیستم ذخیره شدند.")
+            else:
+                write_log("⚠️ خطا در ذخیره‌سازی اطلاعات روی حافظه گوشی.", is_error=True)
 
         def run_analysis_action(e):
             nonlocal current_analysis, current_df
