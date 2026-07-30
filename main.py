@@ -88,7 +88,6 @@ except ImportError:
 
 
 def main(page: ft.Page):
-    # سیستم مکانیزم محافظت برای جلوگیری از صفحه سیاه
     try:
         # ------------------------------------------------------------------
         # تنظیمات عمومی و ظاهری صفحه
@@ -103,7 +102,7 @@ def main(page: ft.Page):
         current_analysis = None
         current_df = None
 
-        # تعریف ثابت رنگ طلایی استاندارد هگز
+        # رنگ طلایی استاندارد
         GOLD_COLOR = "#FFD700"
 
         # ------------------------------------------------------------------
@@ -148,14 +147,14 @@ def main(page: ft.Page):
 
         log_box = ft.Text(
             value="سیستم آماده به کار است. نماد را مشخص کرده و دکمه تحلیل را بزنید.\n",
-            color=ft.colors.GREEN_300,
+            color="green300",
             size=13,
         )
 
         log_container = ft.Container(
             content=ft.Column([log_box], scroll=ft.ScrollMode.ALWAYS),
-            bgcolor=ft.colors.BLACK_54,
-            border=ft.Border.all(1, ft.colors.GREY_800),
+            bgcolor="black54",
+            border=ft.Border.all(1, "grey800"),
             border_radius=8,
             padding=15,
             height=180,
@@ -327,10 +326,10 @@ def main(page: ft.Page):
         page.add(
             ft.Column([
                 ft.Row([
-                    ft.Icon(ft.icons.CANDLESTICK_CHART, color=GOLD_COLOR, size=36),
+                    ft.Icon("candlestick_chart", color=GOLD_COLOR, size=36),
                     ft.Text("Mehran Trader - نرم‌افزار مدیریت عرضه و تقاضا", size=18, weight=ft.FontWeight.BOLD, color=GOLD_COLOR),
                 ], alignment=ft.MainAxisAlignment.START),
-                ft.Divider(color=ft.colors.GREY_800),
+                ft.Divider(color="grey800"),
 
                 ft.Text("۱. تنظیمات تحلیل نماد", size=15, weight=ft.FontWeight.BOLD),
                 ft.Row([symbol_input, tf_dropdown]),
@@ -338,45 +337,44 @@ def main(page: ft.Page):
                 ft.Text("۲. تنظیمات تلگرام و مدیریت ریسک", size=15, weight=ft.FontWeight.BOLD),
                 ft.Row([bot_token_input, chat_id_input, risk_input]),
 
-                ft.Divider(color=ft.colors.GREY_800),
+                ft.Divider(color="grey800"),
 
                 ft.Row([
                     ft.ElevatedButton(
                         "🔍 تحلیل و محاسبه زون‌ها",
                         on_click=run_analysis_action,
-                        icon=ft.icons.ANALYTICS,
+                        icon="analytics",
                         color="black",
                         bgcolor=GOLD_COLOR,
                     ),
                     ft.ElevatedButton(
                         "✈️ ارسال به تلگرام",
                         on_click=send_telegram_action,
-                        icon=ft.icons.SEND,
-                        bgcolor=ft.colors.BLUE_700,
+                        icon="send",
+                        bgcolor="blue700",
                     ),
                     ft.ElevatedButton(
                         "⚡ اجرای پله‌ای در MT5",
                         on_click=execute_mt5_action,
-                        icon=ft.icons.PLAY_ARROW,
-                        bgcolor=ft.colors.GREEN_700,
+                        icon="play_arrow",
+                        bgcolor="green700",
                     ),
                     ft.ElevatedButton(
                         "❌ بستن تمام پوزیشن‌ها (Reset)",
                         on_click=reset_all_action,
-                        icon=ft.icons.CANCEL,
-                        bgcolor=ft.colors.RED_700,
+                        icon="cancel",
+                        bgcolor="red700",
                     ),
                 ], wrap=True, spacing=10),
 
                 result_card,
-                ft.Divider(color=ft.colors.GREY_800),
+                ft.Divider(color="grey800"),
                 ft.Text("📜 گزارش عملیات و لاگ سیستم:", size=14, weight=ft.FontWeight.BOLD),
                 log_container,
             ], spacing=15)
         )
 
     except Exception as err:
-        # اگر هر خطایی در اجرای برنامه رخ داد، به جای صفحه سیاه، متنش روی صفحه چاپ می‌شود
         page.add(
             ft.Container(
                 content=ft.Column([
