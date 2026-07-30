@@ -8,23 +8,37 @@ import os
 import traceback
 
 # ------------------------------------------------------------------
-# سیستم مدیریت فایل تنظیمات بومی پایتون
+# سیستم مدیریت فایل تنظیمات و لیست نمادها
 # ------------------------------------------------------------------
 SETTINGS_FILE = "mehran_trader_settings.json"
+
+DEFAULT_SYMBOLS = [
+    {"code": "XAUUSD", "name": "طلا (XAUUSD)"},
+    {"code": "EURUSD", "name": "یورو / دلار (EURUSD)"},
+    {"code": "GBPUSD", "name": "پوند / دلار (GBPUSD)"},
+    {"code": "USDJPY", "name": "دلار / ین (USDJPY)"},
+    {"code": "AUDUSD", "name": "دلار استرالیا / دلار (AUDUSD)"},
+    {"code": "USDCAD", "name": "دلار / دلار کانادا (USDCAD)"},
+    {"code": "GBPJPY", "name": "پوند / ین (GBPJPY)"},
+    {"code": "BTCUSD", "name": "بیت‌کوین (BTCUSD)"},
+]
 
 def load_settings():
     try:
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                if "symbols" not in data or not data["symbols"]:
+                    data["symbols"] = DEFAULT_SYMBOLS
+                return data
     except Exception:
         pass
-    return {}
+    return {"symbols": DEFAULT_SYMBOLS}
 
 def save_settings_to_file(data):
     try:
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f)
+            json.dump(data, f, ensure_ascii=False, indent=2)
         return True
     except Exception:
         return False
@@ -185,33 +199,28 @@ def main(page: ft.Page):
         page.title = "Mehran Forex Trading Group"
         page.theme_mode = "dark"
         page.rtl = True
-        page.padding = 15
+        page.padding = 10
         page.scroll = "auto"
 
         current_analysis = None
 
-        # بازیابی تنظیمات
+        # بارگذاری تنظیمات و لیست نمادها
         saved_data = load_settings()
-        saved_symbol = saved_data.get("saved_symbol", "XAUUSD")
+        symbols_list = saved_data.get("symbols", DEFAULT_SYMBOLS)
+        saved_symbol = saved_data.get("saved_symbol", symbols_list[0]["code"] if symbols_list else "XAUUSD")
         saved_tf = saved_data.get("saved_tf", "D1")
         saved_token = saved_data.get("saved_token", "")
         saved_chat_id = saved_data.get("saved_chat_id", "")
         saved_risk = saved_data.get("saved_risk", "40")
 
+        # ------------------------------------------------------------------
+        # عناصر UI تب اول (تحلیل و معامله)
+        # ------------------------------------------------------------------
         symbol_dropdown = ft.Dropdown(
             label="انتخاب نماد معاملاتی",
-            value=saved_symbol,
             width=260,
-            options=[
-                ft.dropdown.Option("XAUUSD", "طلا (XAUUSD)"),
-                ft.dropdown.Option("EURUSD", "یورو / دلار (EURUSD)"),
-                ft.dropdown.Option("GBPUSD", "پوند / دلار (GBPUSD)"),
-                ft.dropdown.Option("USDJPY", "دلار / ین (USDJPY)"),
-                ft.dropdown.Option("AUDUSD", "دلار استرالیا / دلار (AUDUSD)"),
-                ft.dropdown.Option("USDCAD", "دلار / دلار کانادا (USDCAD)"),
-                ft.dropdown.Option("GBPJPY", "پوند / ین (GBPJPY)"),
-                ft.dropdown.Option("BTCUSD", "بیت‌کوین (BTCUSD)"),
-            ],
+            value=saved_symbol,
+            options=[ft.dropdown.Option(item["code"], item["name"]) for item in symbols_list],
         )
 
         tf_dropdown = ft.Dropdown(
@@ -230,7 +239,7 @@ def main(page: ft.Page):
             value=saved_token,
             password=True,
             can_reveal_password=True,
-            width=320,
+            width=300,
         )
 
         chat_id_input = ft.TextField(
@@ -256,7 +265,7 @@ def main(page: ft.Page):
             bgcolor="#1A1A1A",
             border_radius=8,
             padding=12,
-            height=140,
+            height=130,
         )
 
         placeholder_card = ft.Container(
@@ -268,22 +277,27 @@ def main(page: ft.Page):
 
         results_list_column = ft.Column([placeholder_card], spacing=10)
 
+        # ------------------------------------------------------------------
+        # توابع تب اول
+        # ------------------------------------------------------------------
         def write_log(message: str, is_error: bool = False):
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
             prefix = "❌ " if is_error else "🔹 "
             log_box.value += f"[{timestamp}] {prefix}{message}\n"
             page.update()
 
+        def save_current_state():
+            saved_data["saved_symbol"] = symbol_dropdown.value
+            saved_data["saved_tf"] = tf_dropdown.value
+            saved_data["saved_token"] = bot_token_input.value.strip()
+            saved_data["saved_chat_id"] = chat_id_input.value.strip()
+            saved_data["saved_risk"] = risk_input.value.strip()
+            saved_data["symbols"] = symbols_list
+            save_settings_to_file(saved_data)
+
         def save_settings_action(e):
-            new_data = {
-                "saved_symbol": symbol_dropdown.value,
-                "saved_tf": tf_dropdown.value,
-                "saved_token": bot_token_input.value.strip(),
-                "saved_chat_id": chat_id_input.value.strip(),
-                "saved_risk": risk_input.value.strip()
-            }
-            if save_settings_to_file(new_data):
-                write_log("💾 تنظیمات با موفقیت ذخیره شدند.")
+            save_current_state()
+            write_log("💾 تنظیمات با موفقیت در حافظه ذخیره شدند.")
 
         def clear_results_action(e):
             results_list_column.controls.clear()
@@ -306,7 +320,7 @@ def main(page: ft.Page):
             if current_df.get('is_live'):
                 write_log(f"✅ داده‌های زنده دریافت شد. آخرین قیمت: {last_price:.4f}")
             else:
-                write_log(f"⚠️ عدم اتصال زنده به اینترنت؛ تحلیل بر اساس آخرین داده‌های محاسباتی انجام شد.", is_error=True)
+                write_log(f"⚠️ عدم اتصال زنده به اینترنت؛ تحلیل بر اساس داده‌های موجود انجام شد.", is_error=True)
 
             engine = SupplyDemandEngine(symbol, timeframe)
             orange_info = engine.calculate_orange_lines(current_df)
@@ -327,7 +341,6 @@ def main(page: ft.Page):
 
             time_now = datetime.datetime.now().strftime("%H:%M:%S")
 
-            # اصلاح ساختار border جهت سازگاری کامل با اندروید
             card = ft.Container(
                 content=ft.Column([
                     ft.Row([
@@ -355,7 +368,7 @@ def main(page: ft.Page):
             )
 
             results_list_column.controls.insert(0, card)
-            write_log("✅ نتیجه تحلیل در بخش نتایج درج شد.")
+            write_log("✅ نتیجه تحلیل درج شد.")
             page.update()
 
         def send_telegram_action(e):
@@ -397,39 +410,149 @@ def main(page: ft.Page):
                 write_log("⚠️ این بخش مخصوص نسخه ویندوز متصل به متاتریدر ۵ است.", is_error=True)
                 return
 
+        # ------------------------------------------------------------------
+        # عناصر و توابع تب دوم (مدیریت نمادها)
+        # ------------------------------------------------------------------
+        new_code_input = ft.TextField(label="کد نماد (مثلاً NZDUSD)", width=180)
+        new_name_input = ft.TextField(label="نام فارسی / توضیحات", width=220)
+        symbols_view_column = ft.Column(spacing=8)
+
+        def render_symbols_list():
+            symbols_view_column.controls.clear()
+            for idx, item in enumerate(symbols_list):
+                def make_delete_handler(index_to_del):
+                    return lambda e: delete_symbol_action(index_to_del)
+
+                row = ft.Container(
+                    content=ft.Row([
+                        ft.Column([
+                            ft.Text(item["name"], size=14, weight="bold", color="#FFFFFF"),
+                            ft.Text(f"کد نماد: {item['code']}", size=11, color="#B0BEC5"),
+                        ]),
+                        ft.IconButton(
+                            icon=ft.icons.DELETE_OUTLINED,
+                            icon_color="#FF5252",
+                            tooltip="حذف نماد",
+                            on_click=make_delete_handler(idx)
+                        )
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    bgcolor="#262626",
+                    padding=10,
+                    border_radius=6,
+                )
+                symbols_view_column.controls.append(row)
+
+            # بروزرسانی منوی کشویی در تب اول
+            symbol_dropdown.options = [ft.dropdown.Option(i["code"], i["name"]) for i in symbols_list]
+            if symbols_list and symbol_dropdown.value not in [i["code"] for i in symbols_list]:
+                symbol_dropdown.value = symbols_list[0]["code"]
+
+            page.update()
+
+        def add_new_symbol_action(e):
+            code = new_code_input.value.strip().upper()
+            name = new_name_input.value.strip()
+
+            if not code:
+                write_log("لطفاً کد نماد را وارد کنید.", is_error=True)
+                return
+
+            if not name:
+                name = f"{code}"
+
+            # جلوگیری از اضافه شدن نماد تکراری
+            for item in symbols_list:
+                if item["code"] == code:
+                    write_log("این نماد قبلاً در لیست موجود است.", is_error=True)
+                    return
+
+            symbols_list.append({"code": code, "name": f"{name} ({code})"})
+            new_code_input.value = ""
+            new_name_input.value = ""
+
+            save_current_state()
+            render_symbols_list()
+            write_log(f"➕ نماد جدید {code} با موفقیت اضافه شد.")
+
+        def delete_symbol_action(index):
+            if len(symbols_list) <= 1:
+                write_log("حداقل باید یک نماد در لیست باقی بماند.", is_error=True)
+                return
+
+            removed = symbols_list.pop(index)
+            save_current_state()
+            render_symbols_list()
+            write_log(f"🗑 نماد {removed['code']} حذف شد.")
+
+        render_symbols_list()
+
+        # ------------------------------------------------------------------
+        # ساخت تب‌ها (Tabs Layout)
+        # ------------------------------------------------------------------
+        tab_trading = ft.Tab(
+            text="📈 تحلیل و سیگنال",
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Text("۱. تنظیمات تحلیل نماد", size=14, weight="bold"),
+                    ft.Row([symbol_dropdown, tf_dropdown], wrap=True),
+
+                    ft.Text("۲. تنظیمات تلگرام و مدیریت ریسک", size=14, weight="bold"),
+                    ft.Row([bot_token_input, chat_id_input, risk_input], wrap=True),
+                    ft.ElevatedButton("💾 ذخیره تنظیمات", on_click=save_settings_action),
+
+                    ft.Divider(),
+
+                    ft.Row([
+                        ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action),
+                        ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action),
+                        ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action),
+                        ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها", on_click=reset_all_action),
+                    ], wrap=True, spacing=10),
+
+                    ft.Divider(),
+                    ft.Row([
+                        ft.Text("📊 نتایج تحلیل‌ها:", size=15, weight="bold", color="#FFD700"),
+                        ft.TextButton("🧹 پاک کردن نتایج", on_click=clear_results_action)
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    
+                    results_list_column,
+
+                    ft.Divider(),
+                    ft.Text("📜 گزارش عملیات و لاگ سیستم:", size=13, weight="bold"),
+                    log_container,
+                ], spacing=10),
+                padding=10
+            )
+        )
+
+        tab_manage_symbols = ft.Tab(
+            text="⚙️ مدیریت نمادها",
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Text("افزودن نماد معاملاتی جدید", size=15, weight="bold", color="#FFD700"),
+                    ft.Text("می‌توانید هر نماد دلخواهی (طلا، جفت‌ارزها، کریپتو) را برای تحلیل در آینده اضافه کنید:", size=12, color="#B0BEC5"),
+                    
+                    ft.Row([new_code_input, new_name_input], wrap=True),
+                    ft.ElevatedButton("➕ افزودن نماد جدید", on_click=add_new_symbol_action),
+                    
+                    ft.Divider(),
+                    ft.Text("لیست نمادهای فعلی برنامه:", size=14, weight="bold"),
+                    symbols_view_column,
+                ], spacing=12),
+                padding=10
+            )
+        )
+
+        tabs_control = ft.Tabs(
+            selected_index=0,
+            animation_duration=300,
+            tabs=[tab_trading, tab_manage_symbols],
+            expand=True
+        )
+
         page.add(
-            ft.Column([
-                ft.Text("Mehran Trader - مدیریت عرضه و تقاضا", size=18, weight="bold", color="#FFD700"),
-                ft.Divider(),
-
-                ft.Text("۱. تنظیمات تحلیل نماد", size=14, weight="bold"),
-                ft.Row([symbol_dropdown, tf_dropdown], wrap=True),
-
-                ft.Text("۲. تنظیمات تلگرام و مدیریت ریسک", size=14, weight="bold"),
-                ft.Row([bot_token_input, chat_id_input, risk_input], wrap=True),
-                ft.ElevatedButton("💾 ذخیره تنظیمات", on_click=save_settings_action),
-
-                ft.Divider(),
-
-                ft.Row([
-                    ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action),
-                    ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action),
-                    ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action),
-                    ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها", on_click=reset_all_action),
-                ], wrap=True, spacing=10),
-
-                ft.Divider(),
-                ft.Row([
-                    ft.Text("📊 نتایج تحلیل‌ها:", size=15, weight="bold", color="#FFD700"),
-                    ft.TextButton("🧹 پاک کردن نتایج", on_click=clear_results_action)
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                
-                results_list_column,
-
-                ft.Divider(),
-                ft.Text("📜 گزارش عملیات و لاگ سیستم:", size=13, weight="bold"),
-                log_container,
-            ], spacing=12)
+            ft.Text("Mehran Trader - مدیریت عرضه و تقاضا", size=18, weight="bold", color="#FFD700"),
+            tabs_control
         )
 
     except Exception:
