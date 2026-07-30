@@ -1,4 +1,3 @@
-
 import flet as ft
 import datetime
 import random
@@ -89,10 +88,22 @@ except ImportError:
     MT5ExecutionEngine = None
 
 
+def get_safe_border(width=1, color="#424242"):
+    """تابع ایمن برای ساخت Border بدون کرش در نسخه‌های مختلف Flet"""
+    try:
+        return ft.Border.all(width, color)
+    except Exception:
+        try:
+            side = ft.BorderSide(width, color)
+            return ft.Border(top=side, bottom=side, left=side, right=side)
+        except Exception:
+            return None
+
+
 def main(page: ft.Page):
     try:
         # ------------------------------------------------------------------
-        # تنظیمات عمومی و ظاهری صفحه (استفاده از رشته خالص به جای Enum)
+        # تنظیمات عمومی و ظاهری صفحه
         # ------------------------------------------------------------------
         page.title = "Mehran Forex Trading Group - روانشناسی عرضه و تقاضا"
         page.theme_mode = "dark"
@@ -105,7 +116,7 @@ def main(page: ft.Page):
         current_df = None
 
         # ------------------------------------------------------------------
-        # عناصر رابط کاربری (UI Controls) - کدهای HEX دقیق برای رنگ‌ها
+        # عناصر رابط کاربری (UI Controls)
         # ------------------------------------------------------------------
         symbol_input = ft.TextField(
             label="نماد معاملاتی (مثلاً XAUUSD یا EURUSD)",
@@ -153,7 +164,7 @@ def main(page: ft.Page):
         log_container = ft.Container(
             content=ft.Column([log_box], scroll="always"),
             bgcolor="#1E1E1E",
-            border=ft.border.all(1, "#424242"),
+            border=get_safe_border(1, "#424242"),
             border_radius=8,
             padding=15,
             height=180,
@@ -339,10 +350,10 @@ def main(page: ft.Page):
                 ft.Divider(color="#424242"),
 
                 ft.Row([
-                    ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, icon="analytics", style=ft.ButtonStyle(color="#000000", bg="#FFD700")),
-                    ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon="send", style=ft.ButtonStyle(bg="#1976D2")),
-                    ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action, icon="play_arrow", style=ft.ButtonStyle(bg="#388E3C")),
-                    ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon="cancel", style=ft.ButtonStyle(bg="#D32F2F")),
+                    ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, icon="analytics", color="#000000", bgcolor="#FFD700"),
+                    ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon="send", color="#FFFFFF", bgcolor="#1976D2"),
+                    ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action, icon="play_arrow", color="#FFFFFF", bgcolor="#388E3C"),
+                    ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon="cancel", color="#FFFFFF", bgcolor="#D32F2F"),
                 ], wrap=True, spacing=10),
 
                 result_card,
