@@ -1,8 +1,10 @@
+
 import flet as ft
 import datetime
 import random
 import urllib.request
 import urllib.parse
+import traceback
 
 # ------------------------------------------------------------------
 # فراخوانی ایمن ماژول‌ها یا استفاده از موتور داخلی مستقل برای اندروید
@@ -90,29 +92,26 @@ except ImportError:
 def main(page: ft.Page):
     try:
         # ------------------------------------------------------------------
-        # تنظیمات عمومی و ظاهری صفحه
+        # تنظیمات عمومی و ظاهری صفحه (استفاده از رشته خالص به جای Enum)
         # ------------------------------------------------------------------
-        page.title = "Mehran Forex Trading Group"
-        page.theme_mode = ft.ThemeMode.DARK
+        page.title = "Mehran Forex Trading Group - روانشناسی عرضه و تقاضا"
+        page.theme_mode = "dark"
         page.rtl = True
         page.padding = 20
-        page.scroll = ft.ScrollMode.AUTO
+        page.scroll = "auto"
 
         # متغیرهای ذخیره وضعیت تحلیل
         current_analysis = None
         current_df = None
 
-        # رنگ طلایی استاندارد
-        GOLD_COLOR = "#FFD700"
-
         # ------------------------------------------------------------------
-        # عناصر رابط کاربری (UI Controls)
+        # عناصر رابط کاربری (UI Controls) - کدهای HEX دقیق برای رنگ‌ها
         # ------------------------------------------------------------------
         symbol_input = ft.TextField(
             label="نماد معاملاتی (مثلاً XAUUSD یا EURUSD)",
             value="XAUUSD",
             width=300,
-            border_color=GOLD_COLOR,
+            border_color="#FFD700",
         )
 
         tf_dropdown = ft.Dropdown(
@@ -142,19 +141,19 @@ def main(page: ft.Page):
             label="سقف ریسک کل (%)",
             value="40",
             width=150,
-            keyboard_type=ft.KeyboardType.NUMBER,
+            keyboard_type="number",
         )
 
         log_box = ft.Text(
             value="سیستم آماده به کار است. نماد را مشخص کرده و دکمه تحلیل را بزنید.\n",
-            color="green300",
+            color="#81C784",
             size=13,
         )
 
         log_container = ft.Container(
-            content=ft.Column([log_box], scroll=ft.ScrollMode.ALWAYS),
-            bgcolor="black54",
-            border=ft.Border.all(1, "grey800"),
+            content=ft.Column([log_box], scroll="always"),
+            bgcolor="#1E1E1E",
+            border=ft.border.all(1, "#424242"),
             border_radius=8,
             padding=15,
             height=180,
@@ -227,8 +226,8 @@ def main(page: ft.Page):
             }
 
             result_card.controls = [
-                ft.Divider(color=GOLD_COLOR),
-                ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight=ft.FontWeight.BOLD, color=GOLD_COLOR),
+                ft.Divider(color="#FFD700"),
+                ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight="bold", color="#FFD700"),
                 ft.Row([
                     ft.Text(f"دسته کندل: {orange_info['category']}"),
                     ft.Text(f"خط نارنجی بالا: {orange_info['top_orange']:.4f}"),
@@ -244,7 +243,7 @@ def main(page: ft.Page):
                 ]),
             ]
             result_card.visible = True
-            write_log("✅ تحلیل با موفقیت انجام شد و خطوط محاسبه شدند.")
+            write_log("✅ تحلیل با موفقیت انجام شد و خطوط نارنجی، بنفش و زون‌ها محاسبه شدند.")
             page.update()
 
         def send_telegram_action(e):
@@ -288,10 +287,10 @@ def main(page: ft.Page):
 
             mt5_engine = MT5ExecutionEngine(max_total_risk_percent=float(risk_input.value))
             if not mt5_engine.connect():
-                write_log("خطا در برقراری ارتباط با متاتریدر ۵.", is_error=True)
+                write_log("خطا در برقراری ارتباط با نرم‌افزار متاتریدر ۵ ویندوز.", is_error=True)
                 return
 
-            write_log("اتصال به متاتریدر ۵ برقرار شد.")
+            write_log("اتصال به متاتریدر ۵ برقرار شد. در حال محاسبه و ارسال سفارش‌های لیمیت...")
             engine = SupplyDemandEngine(current_analysis["symbol"], current_analysis["timeframe"])
             orders_plan = engine.calculate_limit_orders(current_analysis["zones"]["near"], total_volume=0.3, steps=3)
 
@@ -305,7 +304,7 @@ def main(page: ft.Page):
             )
 
             if res["success"]:
-                write_log(f"🚀 سفارش‌ها با موفقیت ثبت شدند.")
+                write_log(f"🚀 تعداد {res['placed_count']} سفارش لیمیت پله‌ای با موفقیت روی متاتریدر ۵ ثبت شد.")
             else:
                 write_log(f"خطا در ثبت سفارش: {res['message']}", is_error=True)
 
@@ -318,7 +317,7 @@ def main(page: ft.Page):
 
             mt5_engine = MT5ExecutionEngine()
             res = mt5_engine.close_all_and_cancel_pendings()
-            write_log(f"🧹 ریست انجام شد.")
+            write_log(f"🧹 ریست کامل انجام شد: {res['closed_positions']} پوزیشن بسته و {res['cancelled_orders']} سفارش معلق لغو شدند.")
 
         # ------------------------------------------------------------------
         # چیدمان UI
@@ -326,64 +325,42 @@ def main(page: ft.Page):
         page.add(
             ft.Column([
                 ft.Row([
-                    ft.Icon("candlestick_chart", color=GOLD_COLOR, size=36),
-                    ft.Text("Mehran Trader - نرم‌افزار مدیریت عرضه و تقاضا", size=18, weight=ft.FontWeight.BOLD, color=GOLD_COLOR),
-                ], alignment=ft.MainAxisAlignment.START),
-                ft.Divider(color="grey800"),
+                    ft.Icon("candlestick_chart", color="#FFD700", size=36),
+                    ft.Text("Mehran Trader - نرم‌افزار مدیریت عرضه و تقاضا", size=18, weight="bold", color="#FFD700"),
+                ], alignment="start"),
+                ft.Divider(color="#424242"),
 
-                ft.Text("۱. تنظیمات تحلیل نماد", size=15, weight=ft.FontWeight.BOLD),
+                ft.Text("۱. تنظیمات تحلیل نماد", size=15, weight="bold"),
                 ft.Row([symbol_input, tf_dropdown]),
 
-                ft.Text("۲. تنظیمات تلگرام و مدیریت ریسک", size=15, weight=ft.FontWeight.BOLD),
+                ft.Text("۲. تنظیمات تلگرام و مدیریت ریسک", size=15, weight="bold"),
                 ft.Row([bot_token_input, chat_id_input, risk_input]),
 
-                ft.Divider(color="grey800"),
+                ft.Divider(color="#424242"),
 
                 ft.Row([
-                    ft.ElevatedButton(
-                        "🔍 تحلیل و محاسبه زون‌ها",
-                        on_click=run_analysis_action,
-                        icon="analytics",
-                        color="black",
-                        bgcolor=GOLD_COLOR,
-                    ),
-                    ft.ElevatedButton(
-                        "✈️ ارسال به تلگرام",
-                        on_click=send_telegram_action,
-                        icon="send",
-                        bgcolor="blue700",
-                    ),
-                    ft.ElevatedButton(
-                        "⚡ اجرای پله‌ای در MT5",
-                        on_click=execute_mt5_action,
-                        icon="play_arrow",
-                        bgcolor="green700",
-                    ),
-                    ft.ElevatedButton(
-                        "❌ بستن تمام پوزیشن‌ها (Reset)",
-                        on_click=reset_all_action,
-                        icon="cancel",
-                        bgcolor="red700",
-                    ),
+                    ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, icon="analytics", style=ft.ButtonStyle(color="#000000", bg="#FFD700")),
+                    ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon="send", style=ft.ButtonStyle(bg="#1976D2")),
+                    ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action, icon="play_arrow", style=ft.ButtonStyle(bg="#388E3C")),
+                    ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon="cancel", style=ft.ButtonStyle(bg="#D32F2F")),
                 ], wrap=True, spacing=10),
 
                 result_card,
-                ft.Divider(color="grey800"),
-                ft.Text("📜 گزارش عملیات و لاگ سیستم:", size=14, weight=ft.FontWeight.BOLD),
+                ft.Divider(color="#424242"),
+                ft.Text("📜 گزارش عملیات و لاگ سیستم:", size=14, weight="bold"),
                 log_container,
             ], spacing=15)
         )
 
-    except Exception as err:
+    except Exception:
+        # مدیریت خطا و جلوگیری از صفحه مشکی
+        err_msg = traceback.format_exc()
+        page.clean()
         page.add(
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("⚠️ خطای اجرا در محیط اندروید:", size=18, color="red", weight=ft.FontWeight.BOLD),
-                    ft.Text(str(err), size=14, color="white"),
-                ]),
-                padding=20,
-            )
+            ft.Text("⚠️ خطایی در بارگذاری برنامه رخ داده است:", color="#FF5252", size=16, weight="bold"),
+            ft.Text(err_msg, color="#FFFFFF", size=12, selectable=True)
         )
+        page.update()
 
 if __name__ == "__main__":
     ft.app(target=main)
