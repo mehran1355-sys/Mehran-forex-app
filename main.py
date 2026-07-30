@@ -1,11 +1,10 @@
 import flet as ft
 import datetime
-import random
 import urllib.request
 import urllib.parse
-import traceback
 import json
 import os
+import traceback
 
 # ------------------------------------------------------------------
 # سیستم مدیریت فایل تنظیمات بومی پایتون
@@ -30,6 +29,70 @@ def save_settings_to_file(data):
         return False
 
 # ------------------------------------------------------------------
+# دریافت داده‌های زنده بازار از API اختصاصی با urllib
+# ------------------------------------------------------------------
+def fetch_live_ohlc(symbol: str, timeframe: str):
+    """
+    دریافت کندل‌های واقعی بازار بدون نیاز به کتابخانه‌های سنگین جانبی
+    """
+    # نگاشت تایم‌فریم‌ها به استانداردهای سرویس داده
+    tf_map = {
+        "MN1": ("1mo", "5y"),
+        "W1": ("1wk", "2y"),
+        "D1": ("1d", "1y"),
+    }
+    interval, period = tf_map.get(timeframe, ("1d", "1y"))
+
+    # تنظیم تبدیل نمادها (مثلا XAUUSD به XAUUSD=X)
+    formatted_symbol = symbol.strip().upper()
+    if formatted_symbol == "XAUUSD":
+        formatted_symbol = "XAUUSD=X"
+    elif not formatted_symbol.endswith("=X") and len(formatted_symbol) == 6:
+        formatted_symbol = f"{formatted_symbol}=X"
+
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{formatted_symbol}?interval={interval}&range={period}"
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=12) as response:
+        if response.status != 200:
+            raise Exception(f"خطا در دریافت داده: کد status {response.status}")
+        
+        data = json.loads(response.read().decode('utf-8'))
+        result = data['chart']['result'][0]
+        timestamps = result['timestamp']
+        quote = result['indicators']['quote'][0]
+
+        opens = quote['open']
+        highs = quote['high']
+        lows = quote['low']
+        closes = quote['close']
+
+        # حذف داده‌های خالی (None)
+        clean_dates, clean_open, clean_high, clean_low, clean_close = [], [], [], [], []
+        for i in range(len(timestamps)):
+            if closes[i] is not None and opens[i] is not None:
+                clean_dates.append(datetime.datetime.fromtimestamp(timestamps[i]))
+                clean_open.append(opens[i])
+                clean_high.append(highs[i])
+                clean_low.append(lows[i])
+                clean_close.append(closes[i])
+
+        if not clean_close:
+            raise Exception("داده‌های معتبری برای این نماد یافت نشد.")
+
+        return {
+            'time': clean_dates,
+            'open': clean_open,
+            'high': clean_high,
+            'low': clean_low,
+            'close': clean_close
+        }
+
+# ------------------------------------------------------------------
 # فراخوانی ایمن ماژول‌ها یا استفاده از موتور داخلی مستقل برای اندروید
 # ------------------------------------------------------------------
 try:
@@ -42,11 +105,11 @@ except ImportError:
 
         def calculate_orange_lines(self, df):
             closes = df['close']
-            top_o = max(closes) * 1.002
-            bot_o = min(closes) * 0.998
+            top_o = max(closes[-20:]) * 1.002
+            bot_o = min(closes[-20:]) * 0.998
             return {
                 "category": "دسته A (استاندارد)",
-                "is_bullish": closes[-1] > closes[0],
+                "is_bullish": closes[-1] > closes[-2],
                 "top_orange": top_o,
                 "bottom_orange": bot_o,
             }
@@ -86,9 +149,6 @@ except ImportError:
         def __init__(self, telegram_bot_token, telegram_chat_id):
             self.token = telegram_bot_token
             self.chat_id = telegram_chat_id
-
-        def generate_chart(self, df, analysis):
-            return None
 
         def send_telegram_report(self, chart_path, caption):
             try:
@@ -173,7 +233,7 @@ def main(page: ft.Page):
         )
 
         log_box = ft.Text(
-            value="سیستم آماده به کار است. تنظیمات بارگذاری شدند.\n",
+            value="سیستم آماده به کار است.\n",
             color="#81C784",
             size=12,
         )
@@ -220,72 +280,56 @@ def main(page: ft.Page):
                 write_log("لطفا نماد معاملاتی را وارد کنید.", is_error=True)
                 return
 
-            write_log(f"شروع تحلیل نماد {symbol} در تایم‌فریم {timeframe}...")
+            write_log(f"📡 در حال دریافت کندل‌های واقعی {symbol} از اینترنت...")
 
-            now = datetime.datetime.now()
-            dates = [now - datetime.timedelta(days=i) for i in range(100)]
-            dates.reverse()
+            try:
+                # دریافت قیمت‌های واقعی زنده
+                current_df = fetch_live_ohlc(symbol, timeframe)
+                last_price = current_df['close'][-1]
+                write_log(f"✅ داده‌های زنده دریافت شد. قیمت آخرین کندل: {last_price:.2f}")
 
-            close_price = 2000.0
-            open_prices, high_prices, low_prices, close_prices = [], [], [], []
+                engine = SupplyDemandEngine(symbol, timeframe)
+                orange_info = engine.calculate_orange_lines(current_df)
+                zones = engine.calculate_zones(orange_info, touched_top_first=True)
+                purples = engine.find_purple_lines(current_df, orange_info)
 
-            for _ in range(100):
-                change = random.uniform(-10, 10)
-                close_price += change
-                high = close_price + abs(random.uniform(1, 5))
-                low = close_price - abs(random.uniform(1, 5))
-                open_p = low + (high - low) * random.random()
+                current_analysis = {
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                    "monitoring_tf": engine.get_monitoring_timeframe(),
+                    "category": orange_info["category"],
+                    "is_bullish": orange_info["is_bullish"],
+                    "orange_info": orange_info,
+                    "zones": zones,
+                    "purple_lines": purples,
+                    "tp1": orange_info["top_orange"] if not orange_info["is_bullish"] else orange_info["bottom_orange"],
+                }
 
-                open_prices.append(open_p)
-                high_prices.append(high)
-                low_prices.append(low)
-                close_prices.append(close_price)
+                result_card.controls = [
+                    ft.Divider(),
+                    ft.Text(f"📊 نتایج تحلیل واقعی: {symbol} [{timeframe}]", size=16, weight="bold", color="#FFD700"),
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text(f"💰 آخرین قیمت بازار:  {last_price:.4f}", size=13, color="#64B5F6", weight="bold"),
+                            ft.Text(f"📌 دسته کندل:  {orange_info['category']}", size=13, color="#FFFFFF"),
+                            ft.Text(f"🟧 خط نارنجی بالا:  {orange_info['top_orange']:.4f}", size=13, color="#FFA726"),
+                            ft.Text(f"🟧 خط نارنجی پایین:  {orange_info['bottom_orange']:.4f}", size=13, color="#FFA726"),
+                            ft.Text(f"🟢 زون ۱/۳ نزدیک:  {zones['near'][0]:.4f}  تا  {zones['near'][1]:.4f}", size=13, color="#81C784"),
+                            ft.Text(f"🟡 زون ۱/۳ میانی:  {zones['mid'][0]:.4f}  تا  {zones['mid'][1]:.4f}", size=13, color="#FFF176"),
+                            ft.Text(f"🟪 تارگت بنفش (TP2):  {purples['purple_top']:.4f}", size=13, color="#BA68C8"),
+                            ft.Text(f"⛔ حد ضرر بنفش (SL):  {purples['purple_bottom']:.4f}", size=13, color="#E57373"),
+                        ], spacing=8),
+                        bgcolor="#212121",
+                        padding=14,
+                        border_radius=8,
+                    )
+                ]
+                result_card.visible = True
+                write_log("✅ محاسبات زون‌ها بر اساس کندل‌های زنده انجام شد.")
 
-            current_df = {
-                'time': dates,
-                'open': open_prices,
-                'high': high_prices,
-                'low': low_prices,
-                'close': close_prices
-            }
+            except Exception as err:
+                write_log(f"خطا در دریافت قیمت‌های زنده: {str(err)}", is_error=True)
 
-            engine = SupplyDemandEngine(symbol, timeframe)
-            orange_info = engine.calculate_orange_lines(current_df)
-            zones = engine.calculate_zones(orange_info, touched_top_first=True)
-            purples = engine.find_purple_lines(current_df, orange_info)
-
-            current_analysis = {
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "monitoring_tf": engine.get_monitoring_timeframe(),
-                "category": orange_info["category"],
-                "is_bullish": orange_info["is_bullish"],
-                "orange_info": orange_info,
-                "zones": zones,
-                "purple_lines": purples,
-                "tp1": orange_info["top_orange"] if not orange_info["is_bullish"] else orange_info["bottom_orange"],
-            }
-
-            result_card.controls = [
-                ft.Divider(),
-                ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight="bold", color="#FFD700"),
-                ft.Container(
-                    content=ft.Column([
-                        ft.Text(f"📌 دسته کندل:  {orange_info['category']}", size=13, color="#FFFFFF"),
-                        ft.Text(f"🟧 خط نارنجی بالا:  {orange_info['top_orange']:.4f}", size=13, color="#FFA726"),
-                        ft.Text(f"🟧 خط نارنجی پایین:  {orange_info['bottom_orange']:.4f}", size=13, color="#FFA726"),
-                        ft.Text(f"🟢 زون ۱/۳ نزدیک:  {zones['near'][0]:.4f}  تا  {zones['near'][1]:.4f}", size=13, color="#81C784"),
-                        ft.Text(f"🟡 زون ۱/۳ میانی:  {zones['mid'][0]:.4f}  تا  {zones['mid'][1]:.4f}", size=13, color="#FFF176"),
-                        ft.Text(f"🟪 تارگت بنفش (TP2):  {purples['purple_top']:.4f}", size=13, color="#BA68C8"),
-                        ft.Text(f"⛔ حد ضرر بنفش (SL):  {purples['purple_bottom']:.4f}", size=13, color="#E57373"),
-                    ], spacing=8),
-                    bgcolor="#212121",
-                    padding=14,
-                    border_radius=8,
-                )
-            ]
-            result_card.visible = True
-            write_log("✅ تحلیل با موفقیت انجام شد.")
             page.update()
 
         def send_telegram_action(e):
@@ -303,7 +347,7 @@ def main(page: ft.Page):
             reporter = StrategyReporter(telegram_bot_token=token, telegram_chat_id=chat_id)
 
             caption = (
-                f"🎯 سیگنال استراتژی عرضه و تقاضا\n\n"
+                f"🎯 سیگنال استراتژی عرضه و تقاضا (داده زنده)\n\n"
                 f"🔹 نماد: {current_analysis['symbol']}\n"
                 f"🔹 تایم‌فریم: {current_analysis['timeframe']}\n"
                 f"🟧 خط بالا: {current_analysis['orange_info']['top_orange']:.4f}\n"
