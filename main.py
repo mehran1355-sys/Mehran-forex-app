@@ -430,7 +430,7 @@ def main(page: ft.Page):
                             ft.Text(f"کد نماد: {item['code']}", size=11, color="#B0BEC5"),
                         ]),
                         ft.IconButton(
-                            icon=ft.icons.DELETE_OUTLINED,
+                            icon="delete",  # نام آیکون به‌صورت رشته کاملاً سازگار با تمامی نسخه‌های Flet
                             icon_color="#FF5252",
                             tooltip="حذف نماد",
                             on_click=make_delete_handler(idx)
@@ -460,7 +460,6 @@ def main(page: ft.Page):
             if not name:
                 name = f"{code}"
 
-            # جلوگیری از اضافه شدن نماد تکراری
             for item in symbols_list:
                 if item["code"] == code:
                     write_log("این نماد قبلاً در لیست موجود است.", is_error=True)
