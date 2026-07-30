@@ -336,7 +336,12 @@ def main(page: ft.Page):
             ft.Divider(color="grey800"),
 
             ft.Row([
-                ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, icon="analytics", style=ft.ButtonStyle(color="black", bg="gold")),
+                ft.ElevatedButton(
+    "🔍 تحلیل و محاسبه زون‌ها",
+    on_click=run_analysis_action,
+    icon="analytics",
+    style=ft.ButtonStyle(color="black", bgcolor="gold"),
+)
                 ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon="send", style=ft.ButtonStyle(bg="blue700")),
                 ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action, icon="play_arrow", style=ft.ButtonStyle(bg="green700")),
                 ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon="cancel", style=ft.ButtonStyle(bg="red700")),
