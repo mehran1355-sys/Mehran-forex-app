@@ -35,7 +35,6 @@ def fetch_live_ohlc(symbol: str, timeframe: str):
     """
     دریافت کندل‌های واقعی بازار بدون نیاز به کتابخانه‌های سنگین جانبی
     """
-    # نگاشت تایم‌فریم‌ها به استانداردهای سرویس داده
     tf_map = {
         "MN1": ("1mo", "5y"),
         "W1": ("1wk", "2y"),
@@ -43,10 +42,14 @@ def fetch_live_ohlc(symbol: str, timeframe: str):
     }
     interval, period = tf_map.get(timeframe, ("1d", "1y"))
 
-    # تنظیم تبدیل نمادها (مثلا XAUUSD به XAUUSD=X)
+    # تنظیم استاندارد نمادها برای سرویس داده
     formatted_symbol = symbol.strip().upper()
     if formatted_symbol == "XAUUSD":
         formatted_symbol = "XAUUSD=X"
+    elif formatted_symbol in ["BTCUSD", "BTC"]:
+        formatted_symbol = "BTC-USD"
+    elif formatted_symbol in ["ETHUSD", "ETH"]:
+        formatted_symbol = "ETH-USD"
     elif not formatted_symbol.endswith("=X") and len(formatted_symbol) == 6:
         formatted_symbol = f"{formatted_symbol}=X"
 
@@ -71,7 +74,6 @@ def fetch_live_ohlc(symbol: str, timeframe: str):
         lows = quote['low']
         closes = quote['close']
 
-        # حذف داده‌های خالی (None)
         clean_dates, clean_open, clean_high, clean_low, clean_close = [], [], [], [], []
         for i in range(len(timestamps)):
             if closes[i] is not None and opens[i] is not None:
@@ -180,7 +182,6 @@ def main(page: ft.Page):
         page.scroll = "auto"
 
         current_analysis = None
-        current_df = None
 
         # ------------------------------------------------------------------
         # بازیابی تنظیمات از فایل متنی
@@ -193,12 +194,22 @@ def main(page: ft.Page):
         saved_risk = saved_data.get("saved_risk", "40")
 
         # ------------------------------------------------------------------
-        # عناصر ورودی
+        # عناصر ورودی (لیست کشویی نمادها)
         # ------------------------------------------------------------------
-        symbol_input = ft.TextField(
-            label="نماد معاملاتی (مثلاً XAUUSD)",
+        symbol_dropdown = ft.Dropdown(
+            label="انتخاب نماد معاملاتی",
             value=saved_symbol,
-            width=280,
+            width=260,
+            options=[
+                ft.dropdown.Option("XAUUSD", "طلا (XAUUSD)"),
+                ft.dropdown.Option("EURUSD", "یورو / دلار (EURUSD)"),
+                ft.dropdown.Option("GBPUSD", "پوند / دلار (GBPUSD)"),
+                ft.dropdown.Option("USDJPY", "دلار / ین (USDJPY)"),
+                ft.dropdown.Option("AUDUSD", "دلار استرالیا / دلار (AUDUSD)"),
+                ft.dropdown.Option("USDCAD", "دلار / دلار کانادا (USDCAD)"),
+                ft.dropdown.Option("GBPJPY", "پوند / ین (GBPJPY)"),
+                ft.dropdown.Option("BTCUSD", "بیت‌کوین (BTCUSD)"),
+            ],
         )
 
         tf_dropdown = ft.Dropdown(
@@ -243,10 +254,21 @@ def main(page: ft.Page):
             bgcolor="#1A1A1A",
             border_radius=8,
             padding=12,
-            height=160,
+            height=150,
         )
 
-        result_card = ft.Column(visible=False)
+        # کانتینر نگه‌دارنده لیست کارت‌های تحلیل (تاریخچه)
+        results_list_column = ft.Column(spacing=10)
+        
+        results_header = ft.Row([
+            ft.Text("📊 تاریخچه نتایج تحلیل‌ها:", size=16, weight="bold", color="#FFD700"),
+            ft.TextButton("🧹 پاک کردن نتایج", on_click=lambda e: clear_results_action())
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, visible=False)
+
+        def clear_results_action():
+            results_list_column.controls.clear()
+            results_header.visible = False
+            page.update()
 
         def write_log(message: str, is_error: bool = False):
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
@@ -254,12 +276,9 @@ def main(page: ft.Page):
             log_box.value += f"[{timestamp}] {prefix}{message}\n"
             page.update()
 
-        # ------------------------------------------------------------------
-        # ذخیره‌سازی تنظیمات در فایل JSON
-        # ------------------------------------------------------------------
         def save_settings_action(e):
             new_data = {
-                "saved_symbol": symbol_input.value.strip().upper(),
+                "saved_symbol": symbol_dropdown.value,
                 "saved_tf": tf_dropdown.value,
                 "saved_token": bot_token_input.value.strip(),
                 "saved_chat_id": chat_id_input.value.strip(),
@@ -272,21 +291,16 @@ def main(page: ft.Page):
                 write_log("⚠️ خطا در ذخیره‌سازی اطلاعات روی حافظه گوشی.", is_error=True)
 
         def run_analysis_action(e):
-            nonlocal current_analysis, current_df
-            symbol = symbol_input.value.strip().upper()
+            nonlocal current_analysis
+            symbol = symbol_dropdown.value
             timeframe = tf_dropdown.value
 
-            if not symbol:
-                write_log("لطفا نماد معاملاتی را وارد کنید.", is_error=True)
-                return
-
-            write_log(f"📡 در حال دریافت کندل‌های واقعی {symbol} از اینترنت...")
+            write_log(f"📡 در حال دریافت کندل‌های واقعی {symbol} [{timeframe}] از اینترنت...")
 
             try:
-                # دریافت قیمت‌های واقعی زنده
                 current_df = fetch_live_ohlc(symbol, timeframe)
                 last_price = current_df['close'][-1]
-                write_log(f"✅ داده‌های زنده دریافت شد. قیمت آخرین کندل: {last_price:.2f}")
+                write_log(f"✅ داده‌های زنده دریافت شد. آخرین قیمت: {last_price:.4f}")
 
                 engine = SupplyDemandEngine(symbol, timeframe)
                 orange_info = engine.calculate_orange_lines(current_df)
@@ -305,27 +319,33 @@ def main(page: ft.Page):
                     "tp1": orange_info["top_orange"] if not orange_info["is_bullish"] else orange_info["bottom_orange"],
                 }
 
-                result_card.controls = [
-                    ft.Divider(),
-                    ft.Text(f"📊 نتایج تحلیل واقعی: {symbol} [{timeframe}]", size=16, weight="bold", color="#FFD700"),
-                    ft.Container(
-                        content=ft.Column([
-                            ft.Text(f"💰 آخرین قیمت بازار:  {last_price:.4f}", size=13, color="#64B5F6", weight="bold"),
-                            ft.Text(f"📌 دسته کندل:  {orange_info['category']}", size=13, color="#FFFFFF"),
-                            ft.Text(f"🟧 خط نارنجی بالا:  {orange_info['top_orange']:.4f}", size=13, color="#FFA726"),
-                            ft.Text(f"🟧 خط نارنجی پایین:  {orange_info['bottom_orange']:.4f}", size=13, color="#FFA726"),
-                            ft.Text(f"🟢 زون ۱/۳ نزدیک:  {zones['near'][0]:.4f}  تا  {zones['near'][1]:.4f}", size=13, color="#81C784"),
-                            ft.Text(f"🟡 زون ۱/۳ میانی:  {zones['mid'][0]:.4f}  تا  {zones['mid'][1]:.4f}", size=13, color="#FFF176"),
-                            ft.Text(f"🟪 تارگت بنفش (TP2):  {purples['purple_top']:.4f}", size=13, color="#BA68C8"),
-                            ft.Text(f"⛔ حد ضرر بنفش (SL):  {purples['purple_bottom']:.4f}", size=13, color="#E57373"),
-                        ], spacing=8),
-                        bgcolor="#212121",
-                        padding=14,
-                        border_radius=8,
-                    )
-                ]
-                result_card.visible = True
-                write_log("✅ محاسبات زون‌ها بر اساس کندل‌های زنده انجام شد.")
+                # ساخت کارت جدید برای اضافه شدن به بالای تاریخچه
+                time_now = datetime.datetime.now().strftime("%H:%M:%S")
+                card = ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Text(f"📌 {symbol} [{timeframe}]", size=15, weight="bold", color="#FFD700"),
+                            ft.Text(f"⏱ {time_now}", size=11, color="#B0BEC5"),
+                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                        ft.Text(f"💰 آخرین قیمت بازار:  {last_price:.4f}", size=13, color="#64B5F6", weight="bold"),
+                        ft.Text(f"🏷 دسته کندل:  {orange_info['category']}", size=13, color="#FFFFFF"),
+                        ft.Text(f"🟧 خط نارنجی بالا:  {orange_info['top_orange']:.4f}", size=13, color="#FFA726"),
+                        ft.Text(f"🟧 خط نارنجی پایین:  {orange_info['bottom_orange']:.4f}", size=13, color="#FFA726"),
+                        ft.Text(f"🟢 زون ۱/۳ نزدیک:  {zones['near'][0]:.4f}  تا  {zones['near'][1]:.4f}", size=13, color="#81C784"),
+                        ft.Text(f"🟡 زون ۱/۳ میانی:  {zones['mid'][0]:.4f}  تا  {zones['mid'][1]:.4f}", size=13, color="#FFF176"),
+                        ft.Text(f"🟪 تارگت بنفش (TP2):  {purples['purple_top']:.4f}", size=13, color="#BA68C8"),
+                        ft.Text(f"⛔ حد ضرر بنفش (SL):  {purples['purple_bottom']:.4f}", size=13, color="#E57373"),
+                    ], spacing=6),
+                    bgcolor="#212121",
+                    padding=12,
+                    border_radius=8,
+                    border=ft.border.all(1, "#424242"),
+                )
+
+                # افزودن کارت جدید به ابتدای لیست
+                results_list_column.controls.insert(0, card)
+                results_header.visible = True
+                write_log("✅ تحلیل جدید به لیست اضافه شد.")
 
             except Exception as err:
                 write_log(f"خطا در دریافت قیمت‌های زنده: {str(err)}", is_error=True)
@@ -334,7 +354,7 @@ def main(page: ft.Page):
 
         def send_telegram_action(e):
             if not current_analysis:
-                write_log("ابتدا باید تحلیل را انجام دهید.", is_error=True)
+                write_log("ابتدا باید حداقل یک تحلیل انجام دهید.", is_error=True)
                 return
 
             token = bot_token_input.value.strip()
@@ -347,7 +367,7 @@ def main(page: ft.Page):
             reporter = StrategyReporter(telegram_bot_token=token, telegram_chat_id=chat_id)
 
             caption = (
-                f"🎯 سیگنال استراتژی عرضه و تقاضا (داده زنده)\n\n"
+                f"🎯 سیگنال استراتژی عرضه و تقاضا\n\n"
                 f"🔹 نماد: {current_analysis['symbol']}\n"
                 f"🔹 تایم‌فریم: {current_analysis['timeframe']}\n"
                 f"🟧 خط بالا: {current_analysis['orange_info']['top_orange']:.4f}\n"
@@ -358,7 +378,7 @@ def main(page: ft.Page):
 
             success = reporter.send_telegram_report(None, caption)
             if success:
-                write_log("✈️ گزارش تحلیل با موفقیت به تلگرام ارسال شد.")
+                write_log(f"✈️ گزارش آخرین تحلیل ({current_analysis['symbol']}) به تلگرام ارسال شد.")
             else:
                 write_log("خطا در ارسال به تلگرام. توکن یا چت‌آیدی را بررسی کنید.", is_error=True)
 
@@ -412,7 +432,7 @@ def main(page: ft.Page):
                 ft.Divider(),
 
                 ft.Text("۱. تنظیمات تحلیل نماد", size=14, weight="bold"),
-                ft.Row([symbol_input, tf_dropdown], wrap=True),
+                ft.Row([symbol_dropdown, tf_dropdown], wrap=True),
 
                 ft.Text("۲. تنظیمات تلگرام و مدیریت ریسک", size=14, weight="bold"),
                 ft.Row([bot_token_input, chat_id_input, risk_input], wrap=True),
@@ -427,7 +447,10 @@ def main(page: ft.Page):
                     ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها", on_click=reset_all_action),
                 ], wrap=True, spacing=10),
 
-                result_card,
+                ft.Divider(),
+                results_header,
+                results_list_column,
+
                 ft.Divider(),
                 ft.Text("📜 گزارش عملیات و لاگ سیستم:", size=13, weight="bold"),
                 log_container,
