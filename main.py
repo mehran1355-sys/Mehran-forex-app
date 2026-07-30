@@ -430,7 +430,7 @@ def main(page: ft.Page):
                             ft.Text(f"کد نماد: {item['code']}", size=11, color="#B0BEC5"),
                         ]),
                         ft.IconButton(
-                            icon="delete",  # نام آیکون به‌صورت رشته کاملاً سازگار با تمامی نسخه‌های Flet
+                            icon="delete",
                             icon_color="#FF5252",
                             tooltip="حذف نماد",
                             on_click=make_delete_handler(idx)
@@ -489,7 +489,7 @@ def main(page: ft.Page):
         # ساخت تب‌ها (Tabs Layout)
         # ------------------------------------------------------------------
         tab_trading = ft.Tab(
-            text="📈 تحلیل و سیگنال",
+            label="📈 تحلیل و سیگنال",  # اصلاح پارامتر از text به label
             content=ft.Container(
                 content=ft.Column([
                     ft.Text("۱. تنظیمات تحلیل نماد", size=14, weight="bold"),
@@ -525,7 +525,7 @@ def main(page: ft.Page):
         )
 
         tab_manage_symbols = ft.Tab(
-            text="⚙️ مدیریت نمادها",
+            label="⚙️ مدیریت نمادها",  # اصلاح پارامتر از text به label
             content=ft.Container(
                 content=ft.Column([
                     ft.Text("افزودن نماد معاملاتی جدید", size=15, weight="bold", color="#FFD700"),
