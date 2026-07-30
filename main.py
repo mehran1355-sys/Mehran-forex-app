@@ -150,7 +150,7 @@ def main(page: ft.Page):
     log_container = ft.Container(
         content=ft.Column([log_box], scroll=ft.ScrollMode.ALWAYS),
         bgcolor="black54",
-        border=ft.border.all(1, "grey800"),
+        border=ft.Border.all(1, "grey800"),
         border_radius=8,
         padding=15,
         height=180,
