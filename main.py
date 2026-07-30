@@ -90,7 +90,7 @@ except ImportError:
 
 def main(page: ft.Page):
     try:
-        # تنظیمات کاملاً استاندارد و ایمن صفحه
+        # تنظیمات عمومی و ظاهری صفحه
         page.title = "Mehran Forex Trading Group"
         page.theme_mode = "dark"
         page.rtl = True
@@ -100,7 +100,7 @@ def main(page: ft.Page):
         current_analysis = None
         current_df = None
 
-        # عناصر ورودی بدون پارامترهای گرافیکی ریسکی
+        # عناصر ورودی
         symbol_input = ft.TextField(
             label="نماد معاملاتی (مثلاً XAUUSD)",
             value="XAUUSD",
@@ -213,22 +213,24 @@ def main(page: ft.Page):
                 "tp1": orange_info["top_orange"] if not orange_info["is_bullish"] else orange_info["bottom_orange"],
             }
 
+            # ساخت چیدمان منظم و مرتب برای نمایش نتایج تحلیل
             result_card.controls = [
                 ft.Divider(),
-                ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=15, weight="bold", color="#FFD700"),
-                ft.Row([
-                    ft.Text(f"دسته کندل: {orange_info['category']}"),
-                    ft.Text(f"خط نارنجی بالا: {orange_info['top_orange']:.4f}"),
-                    ft.Text(f"خط نارنجی پایین: {orange_info['bottom_orange']:.4f}"),
-                ]),
-                ft.Row([
-                    ft.Text(f"زون ۱/۳ نزدیک: {zones['near'][0]:.4f} تا {zones['near'][1]:.4f}"),
-                    ft.Text(f"زون ۱/۳ میانی: {zones['mid'][0]:.4f} تا {zones['mid'][1]:.4f}"),
-                ]),
-                ft.Row([
-                    ft.Text(f"حد سود بنفش (TP2): {purples['purple_top']:.4f}"),
-                    ft.Text(f"حد ضرر بنفش (SL): {purples['purple_bottom']:.4f}"),
-                ]),
+                ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight="bold", color="#FFD700"),
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text(f"📌 دسته کندل:  {orange_info['category']}", size=13, color="#FFFFFF"),
+                        ft.Text(f"🟧 خط نارنجی بالا:  {orange_info['top_orange']:.4f}", size=13, color="#FFA726"),
+                        ft.Text(f"🟧 خط نارنجی پایین:  {orange_info['bottom_orange']:.4f}", size=13, color="#FFA726"),
+                        ft.Text(f"🟢 زون ۱/۳ نزدیک:  {zones['near'][0]:.4f}  تا  {zones['near'][1]:.4f}", size=13, color="#81C784"),
+                        ft.Text(f"🟡 زون ۱/۳ میانی:  {zones['mid'][0]:.4f}  تا  {zones['mid'][1]:.4f}", size=13, color="#FFF176"),
+                        ft.Text(f"🟪 تارگت بنفش (TP2):  {purples['purple_top']:.4f}", size=13, color="#BA68C8"),
+                        ft.Text(f"⛔ حد ضرر بنفش (SL):  {purples['purple_bottom']:.4f}", size=13, color="#E57373"),
+                    ], spacing=8),
+                    bgcolor="#212121",
+                    padding=14,
+                    border_radius=8,
+                )
             ]
             result_card.visible = True
             write_log("✅ تحلیل با موفقیت انجام شد.")
@@ -307,7 +309,7 @@ def main(page: ft.Page):
             res = mt5_engine.close_all_and_cancel_pendings()
             write_log(f"🧹 ریست کامل انجام شد: {res['closed_positions']} پوزیشن بسته و {res['cancelled_orders']} سفارش معلق لغو شدند.")
 
-        # چیدمان UI روان و بدون عناصر حساس و کرش‌آفرین
+        # چیدمان اصلی UI
         page.add(
             ft.Column([
                 ft.Text("Mehran Trader - مدیریت عرضه و تقاضا", size=18, weight="bold", color="#FFD700"),
