@@ -88,7 +88,6 @@ def fetch_live_ohlc(symbol: str, timeframe: str):
     except Exception:
         pass
 
-    # در صورت عدم دسترسی به اینترنت یا انقضای API، داده‌ی پشتیبان تولید می‌شود تا UI متوقف نشود
     now = datetime.datetime.now()
     dates = [now - datetime.timedelta(days=i) for i in range(50)]
     dates.reverse()
@@ -260,7 +259,6 @@ def main(page: ft.Page):
             height=140,
         )
 
-        # کارت پیش‌فرض جایگاه نتایج
         placeholder_card = ft.Container(
             content=ft.Text("هنوز تحلیلی انجام نشده است. نماد را انتخاب کرده و دکمه «تحلیل و محاسبه زون‌ها» را بزنید.", color="#757575", size=13),
             bgcolor="#1E1E1E",
@@ -299,7 +297,6 @@ def main(page: ft.Page):
 
             write_log(f"📡 در حال تحلیل {symbol} [{timeframe}]...")
 
-            # اگر کارت اولیه پیش‌فرض وجود دارد، آن را پاک می‌کنیم
             if placeholder_card in results_list_column.controls:
                 results_list_column.controls.remove(placeholder_card)
 
@@ -329,6 +326,8 @@ def main(page: ft.Page):
             }
 
             time_now = datetime.datetime.now().strftime("%H:%M:%S")
+
+            # اصلاح ساختار border جهت سازگاری کامل با اندروید
             card = ft.Container(
                 content=ft.Column([
                     ft.Row([
@@ -347,7 +346,12 @@ def main(page: ft.Page):
                 bgcolor="#212121",
                 padding=12,
                 border_radius=8,
-                border=ft.border.all(1, "#424242"),
+                border=ft.Border(
+                    top=ft.BorderSide(1, "#424242"),
+                    bottom=ft.BorderSide(1, "#424242"),
+                    left=ft.BorderSide(1, "#424242"),
+                    right=ft.BorderSide(1, "#424242")
+                )
             )
 
             results_list_column.controls.insert(0, card)
@@ -393,7 +397,6 @@ def main(page: ft.Page):
                 write_log("⚠️ این بخش مخصوص نسخه ویندوز متصل به متاتریدر ۵ است.", is_error=True)
                 return
 
-        # چیدمان اصلی UI
         page.add(
             ft.Column([
                 ft.Text("Mehran Trader - مدیریت عرضه و تقاضا", size=18, weight="bold", color="#FFD700"),
