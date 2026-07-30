@@ -1,3 +1,4 @@
+
 import flet as ft
 import datetime
 import random
@@ -102,7 +103,7 @@ def main(page: ft.Page):
     current_df = None
 
     # ------------------------------------------------------------------
-    # عناصر رابط کاربری (UI Controls) - استفاده از رشته مستقیم برای جلوگیری از خطای Enum
+    # عناصر رابط کاربری (UI Controls)
     # ------------------------------------------------------------------
     symbol_input = ft.TextField(
         label="نماد معاملاتی (مثلاً XAUUSD یا EURUSD)",
@@ -337,14 +338,30 @@ def main(page: ft.Page):
 
             ft.Row([
                 ft.ElevatedButton(
-    "🔍 تحلیل و محاسبه زون‌ها",
-    on_click=run_analysis_action,
-    icon="analytics",
-    style=ft.ButtonStyle(color="black", bgcolor="gold"),
-)
-                ft.ElevatedButton("✈️ ارسال به تلگرام", on_click=send_telegram_action, icon="send", style=ft.ButtonStyle(bg="blue700")),
-                ft.ElevatedButton("⚡ اجرای پله‌ای در MT5", on_click=execute_mt5_action, icon="play_arrow", style=ft.ButtonStyle(bg="green700")),
-                ft.ElevatedButton("❌ بستن تمام پوزیشن‌ها (Reset)", on_click=reset_all_action, icon="cancel", style=ft.ButtonStyle(bg="red700")),
+                    "🔍 تحلیل و محاسبه زون‌ها",
+                    on_click=run_analysis_action,
+                    icon="analytics",
+                    color="black",
+                    bgcolor="gold",
+                ),
+                ft.ElevatedButton(
+                    "✈️ ارسال به تلگرام",
+                    on_click=send_telegram_action,
+                    icon="send",
+                    bgcolor="blue700",
+                ),
+                ft.ElevatedButton(
+                    "⚡ اجرای پله‌ای در MT5",
+                    on_click=execute_mt5_action,
+                    icon="play_arrow",
+                    bgcolor="green700",
+                ),
+                ft.ElevatedButton(
+                    "❌ بستن تمام پوزیشن‌ها (Reset)",
+                    on_click=reset_all_action,
+                    icon="cancel",
+                    bgcolor="red700",
+                ),
             ], wrap=True, spacing=10),
 
             result_card,
