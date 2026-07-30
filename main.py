@@ -100,17 +100,28 @@ def main(page: ft.Page):
         current_analysis = None
         current_df = None
 
+        # ------------------------------------------------------------------
+        # بازیابی تنظیمات ذخیره‌شده از حافظه محلی گوشی
+        # ------------------------------------------------------------------
+        saved_symbol = page.client_storage.get("saved_symbol") or "XAUUSD"
+        saved_tf = page.client_storage.get("saved_tf") or "D1"
+        saved_token = page.client_storage.get("saved_token") or ""
+        saved_chat_id = page.client_storage.get("saved_chat_id") or ""
+        saved_risk = page.client_storage.get("saved_risk") or "40"
+
+        # ------------------------------------------------------------------
         # عناصر ورودی
+        # ------------------------------------------------------------------
         symbol_input = ft.TextField(
             label="نماد معاملاتی (مثلاً XAUUSD)",
-            value="XAUUSD",
+            value=saved_symbol,
             width=280,
         )
 
         tf_dropdown = ft.Dropdown(
             label="تایم‌فریم",
             width=180,
-            value="D1",
+            value=saved_tf,
             options=[
                 ft.dropdown.Option("MN1", "ماهانه (MN1)"),
                 ft.dropdown.Option("W1", "هفتگی (W1)"),
@@ -120,6 +131,7 @@ def main(page: ft.Page):
 
         bot_token_input = ft.TextField(
             label="Bot Token تلگرام",
+            value=saved_token,
             password=True,
             can_reveal_password=True,
             width=320,
@@ -127,17 +139,18 @@ def main(page: ft.Page):
 
         chat_id_input = ft.TextField(
             label="Chat ID تلگرام",
+            value=saved_chat_id,
             width=180,
         )
 
         risk_input = ft.TextField(
             label="سقف ریسک کل (%)",
-            value="40",
+            value=saved_risk,
             width=140,
         )
 
         log_box = ft.Text(
-            value="سیستم آماده به کار است. نماد را مشخص کرده و دکمه تحلیل را بزنید.\n",
+            value="سیستم آماده به کار است. تنظیمات بارگذاری شدند.\n",
             color="#81C784",
             size=12,
         )
@@ -157,6 +170,17 @@ def main(page: ft.Page):
             prefix = "❌ " if is_error else "🔹 "
             log_box.value += f"[{timestamp}] {prefix}{message}\n"
             page.update()
+
+        # ------------------------------------------------------------------
+        # ذخیره‌سازی تنظیمات در Client Storage
+        # ------------------------------------------------------------------
+        def save_settings_action(e):
+            page.client_storage.set("saved_symbol", symbol_input.value.strip().upper())
+            page.client_storage.set("saved_tf", tf_dropdown.value)
+            page.client_storage.set("saved_token", bot_token_input.value.strip())
+            page.client_storage.set("saved_chat_id", chat_id_input.value.strip())
+            page.client_storage.set("saved_risk", risk_input.value.strip())
+            write_log("💾 تنظیمات تلگرام و ریسک با موفقیت روی حافظه گوشی ذخیره شدند.")
 
         def run_analysis_action(e):
             nonlocal current_analysis, current_df
@@ -213,7 +237,6 @@ def main(page: ft.Page):
                 "tp1": orange_info["top_orange"] if not orange_info["is_bullish"] else orange_info["bottom_orange"],
             }
 
-            # ساخت چیدمان منظم و مرتب برای نمایش نتایج تحلیل
             result_card.controls = [
                 ft.Divider(),
                 ft.Text(f"📊 نتایج تحلیل: {symbol} [{timeframe}]", size=16, weight="bold", color="#FFD700"),
@@ -320,6 +343,7 @@ def main(page: ft.Page):
 
                 ft.Text("۲. تنظیمات تلگرام و مدیریت ریسک", size=14, weight="bold"),
                 ft.Row([bot_token_input, chat_id_input, risk_input], wrap=True),
+                ft.ElevatedButton("💾 ذخیره تنظیمات", on_click=save_settings_action),
 
                 ft.Divider(),
 
