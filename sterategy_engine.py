@@ -1,277 +1,273 @@
-import pandas as pd
-import numpy as np
+import datetime
+
+class Candle:
+    def __init__(self, time, open_, high, low, close):
+        self.time = time
+        self.open = open_
+        self.high = high
+        self.low = low
+        self.close = close
+
+    @property
+    def body(self):
+        return abs(self.close - self.open)
+
+    @property
+    def is_bull(self):
+        return self.close > self.open
+
+    @property
+    def upper_shadow(self):
+        return self.high - max(self.open, self.close)
+
+    @property
+    def lower_shadow(self):
+        return min(self.open, self.close) - self.low
+
 
 class SupplyDemandEngine:
-    """
-    موتور محاسباتی استراتژی روانشناسی عرضه و تقاضا
-    طراحی شده برای تایم‌فریم‌های ماهانه (MN1)، هفتگی (W1) و روزانه (D1)
-    """
-
     def __init__(self, symbol: str, timeframe: str):
         self.symbol = symbol
-        self.timeframe = timeframe.upper()  # MN1, W1, D1
-        
-    def get_lookback_count(self) -> int:
-        """تعیین تعداد کندل‌های دوره ارزیابی بر اساس تایم‌فریم تحلیل"""
-        if self.timeframe == "MN1":
-            return 12
-        elif self.timeframe == "W1":
-            return 24
-        elif self.timeframe == "D1":
-            return 30
-        return 30
+        self.tf = timeframe  # "MN1", "W1", "D1"
 
-    def get_monitoring_timeframe(self) -> str:
-        """تعیین تایم‌فریم مانیتورینگ (دو تایم‌فریم پایین‌تر)"""
-        mapping = {
-            "MN1": "D1",
-            "W1": "H4",
-            "D1": "H1"
-        }
-        return mapping.get(self.timeframe, "H1")
+    # -------------------------------
+    # انتخاب تایم‌فریم مانیتورینگ
+    # -------------------------------
+    def get_monitoring_timeframe(self):
+        if self.tf == "MN1":
+            return "D1"
+        elif self.tf == "W1":
+            return "H4"
+        elif self.tf == "D1":
+            return "H1"
+        return "H1"
 
-    # ------------------------------------------------------------------
-    # ۱. دسته‌بندی اندازه کندل و سنجش سایه‌ها
-    # ------------------------------------------------------------------
-    def classify_candle_size(self, df: pd.DataFrame) -> dict:
-        """
-        محاسبه نسبت بدنه کندل تحلیلی به میانگین ۲ کندل بزرگ دوره اخیر
-        و دسته‌بندی آن به ۴ گروه: خیلی بلند، بلند، کوچک، خیلی کوچک
-        """
-        lookback = self.get_lookback_count()
-        recent_df = df.tail(lookback).copy()
-        
-        recent_df['body'] = (recent_df['close'] - recent_df['open']).abs()
-        
-        # پیدا کردن دو کندل با بزرگ‌ترین بدنه در دوره
-        sorted_bodies = recent_df['body'].sort_values(ascending=False).values
-        if len(sorted_bodies) >= 2:
-            top2_avg = (sorted_bodies[0] + sorted_bodies[1]) / 2.0
-        else:
-            top2_avg = sorted_bodies[0] if len(sorted_bodies) > 0 else 1.0
-
-        last_candle = recent_df.iloc[-1]
-        last_body = last_candle['body']
-        
-        ratio = last_body / top2_avg if top2_avg > 0 else 0.0
+    # -------------------------------
+    # دسته‌بندی کندل بر اساس بدنه
+    # -------------------------------
+    def classify_candle(self, last_candle: Candle, recent_bodies):
+        top_two = sorted(recent_bodies, reverse=True)[:2]
+        avg = sum(top_two) / 2 if top_two else last_candle.body
+        ratio = last_candle.body / avg if avg != 0 else 0
 
         if ratio >= 0.6:
-            category = "VERY_LONG"
-        elif 0.4 <= ratio < 0.6:
-            category = "LONG"
-        elif 0.1 <= ratio < 0.4:
-            category = "SHORT"
+            return "very_long"
+        elif ratio >= 0.4:
+            return "long"
+        elif ratio >= 0.1:
+            return "short"
         else:
-            category = "VERY_SHORT"
+            return "very_short"
 
-        return {
-            "category": category,
-            "ratio": ratio,
-            "candle": last_candle,
-            "top2_avg": top2_avg
+    # -------------------------------
+    # تشخیص سایه بلند
+    # -------------------------------
+    def is_long_shadow(self, body, shadow, candle_type):
+        if self.tf in ["MN1", "W1"]:
+            if candle_type in ["long", "very_long"]:
+                return shadow >= body
+            else:
+                return shadow >= 2 * body
+        elif self.tf == "D1":
+            if candle_type in ["long", "very_long"]:
+                return shadow >= 1.5 * body
+            else:
+                return shadow >= 2.5 * body
+        return False
+
+    # -------------------------------
+    # محاسبه خطوط نارنجی
+    # -------------------------------
+    def calculate_orange_lines(self, df_dict):
+        # df_dict: {'time': [...], 'open': [...], 'high': [...], 'low': [...], 'close': [...]}
+        candles = [
+            Candle(t, o, h, l, c)
+            for t, o, h, l, c in zip(
+                df_dict["time"], df_dict["open"], df_dict["high"], df_dict["low"], df_dict["close"]
+            )
+        ]
+        if not candles:
+            raise ValueError("No candles for orange lines")
+
+        last = candles[-1]
+
+        # تعداد کندلهای اخیر برای بدنه
+        if self.tf == "MN1":
+            window = 12
+        elif self.tf == "W1":
+            window = 24
+        else:
+            window = 30
+
+        recent = candles[-window:] if len(candles) >= window else candles
+        recent_bodies = [c.body for c in recent]
+
+        candle_type = self.classify_candle(last, recent_bodies)
+
+        body = last.body
+        up_shadow = last.upper_shadow
+        down_shadow = last.lower_shadow
+
+        up_long = self.is_long_shadow(body, up_shadow, candle_type)
+        down_long = self.is_long_shadow(body, down_shadow, candle_type)
+
+        if candle_type == "very_long":
+            if last.is_bull:
+                line1 = last.close - 0.25 * body
+                line2 = (last.high if not up_long else last.high - up_shadow * 0.5)
+            else:
+                line1 = last.close + 0.25 * body
+                line2 = (last.low if not down_long else last.low + down_shadow * 0.5)
+
+        elif candle_type == "long":
+            if last.is_bull:
+                line1 = last.open + 0.5 * body
+                line2 = (last.high if not up_long else last.high - up_shadow * 0.5)
+            else:
+                line1 = last.close + 0.5 * body
+                line2 = (last.low if not down_long else last.low + down_shadow * 0.5)
+
+        else:  # short / very_short
+            # برای کوچک‌ها و خیلی کوچک‌ها بر اساس سایه
+            if up_long:
+                line2 = last.high - up_shadow * 0.5
+            else:
+                line2 = last.high
+
+            if down_long:
+                line1 = last.low + down_shadow * 0.5
+            else:
+                line1 = last.low
+
+        top_orange = max(line1, line2)
+        bottom_orange = min(line1, line2)
+
+        # دسته کندل برای نمایش
+        category_map = {
+            "very_long": "کندل خیلی بلند",
+            "long": "کندل بلند",
+            "short": "کندل کوتاه",
+            "very_short": "کندل خیلی کوتاه",
         }
 
-    def is_shadow_long(self, shadow_len: float, body_len: float, category: str) -> bool:
-        """بررسی بلند بودن سایه طبق قوانین تایم‌فریم و نوع کندل"""
-        effective_body = body_len if body_len > 0 else 0.00001
-
-        if self.timeframe in ["MN1", "W1"]:
-            if category in ["VERY_LONG", "LONG"]:
-                return shadow_len >= effective_body
-            else:  # SHORT, VERY_SHORT
-                return shadow_len >= (2.0 * effective_body)
-        else:  # D1
-            if category in ["VERY_LONG", "LONG"]:
-                return shadow_len >= (1.5 * effective_body)
-            else:  # SHORT, VERY_SHORT
-                return shadow_len >= (2.5 * effective_body)
-
-    # ------------------------------------------------------------------
-    # ۲. رسم خطوط نارنجی و تعیین منطقه احتیاط
-    # ------------------------------------------------------------------
-    def calculate_orange_lines(self, df: pd.DataFrame) -> dict:
-        """محاسبه دقیق خطوط نارنجی و مرزهای منطقه احتیاط"""
-        classification = self.classify_candle_size(df)
-        category = classification["category"]
-        candle = classification["candle"]
-
-        open_p = float(candle['open'])
-        close_p = float(candle['close'])
-        high_p = float(candle['high'])
-        low_p = float(candle['low'])
-
-        body_len = abs(close_p - open_p)
-        up_shadow = high_p - max(open_p, close_p)
-        low_shadow = min(open_p, close_p) - low_p
-        is_bullish = close_p >= open_p
-
-        up_shadow_long = self.is_shadow_long(up_shadow, body_len, category)
-        low_shadow_long = self.is_shadow_long(low_shadow, body_len, category)
-
-        orange1 = 0.0
-        orange2 = 0.0
-
-        if is_bullish:
-            if category == "VERY_LONG":
-                orange1 = close_p - (0.25 * body_len)
-                orange2 = (high_p - 0.5 * up_shadow) if up_shadow_long else high_p
-            elif category == "LONG":
-                orange1 = close_p - (0.50 * body_len)
-                orange2 = (high_p - 0.5 * up_shadow) if up_shadow_long else high_p
-            else:  # SHORT / VERY_SHORT
-                orange1 = (high_p - 0.5 * up_shadow) if up_shadow_long else high_p
-                orange2 = (low_p + 0.5 * low_shadow) if low_shadow_long else low_p
-        else:  # کندل نزولی
-            if category == "VERY_LONG":
-                orange1 = close_p + (0.25 * body_len)
-                orange2 = (low_p + 0.5 * low_shadow) if low_shadow_long else low_p
-            elif category == "LONG":
-                orange1 = close_p + (0.50 * body_len)
-                orange2 = (low_p + 0.5 * low_shadow) if low_shadow_long else low_p
-            else:  # SHORT / VERY_SHORT
-                orange1 = (high_p - 0.5 * up_shadow) if up_shadow_long else high_p
-                orange2 = (low_p + 0.5 * low_shadow) if low_shadow_long else low_p
-
-        top_orange = max(orange1, orange2)
-        bottom_orange = min(orange1, orange2)
-        caution_width = top_orange - bottom_orange
-
         return {
-            "category": category,
-            "is_bullish": is_bullish,
+            "category": category_map.get(candle_type, "نامشخص"),
             "top_orange": top_orange,
             "bottom_orange": bottom_orange,
-            "caution_width": caution_width,
-            "zone_step": caution_width / 3.0
         }
 
-    # ------------------------------------------------------------------
-    # ۳. تقسیم‌بندی نواحی سه‌گانه (نزدیک، میانی، دور)
-    # ------------------------------------------------------------------
-    def calculate_zones(self, orange_info: dict, touched_top_first: bool) -> dict:
-        """تقسیم منطقه احتیاط به ۳ بخش مساوی بر اساس خط تاچ شده اولیه"""
-        top_o = orange_info["top_orange"]
-        bot_o = orange_info["bottom_orange"]
-        step = orange_info["zone_step"]
+    # -------------------------------
+    # تقسیم منطقه احتیاط به سه بخش
+    # -------------------------------
+    def calculate_zones(self, orange_info, touched_top_first: bool):
+        top = orange_info["top_orange"]
+        bottom = orange_info["bottom_orange"]
+        zone_size = abs(top - bottom)
+        one_third = zone_size / 3
 
         if touched_top_first:
-            # تاچ خط بالا: نزدیک بالا، میانی وسط، دور پایین
-            near_zone = (top_o - step, top_o)
-            mid_zone = (top_o - 2 * step, top_o - step)
-            far_zone = (bot_o, top_o - 2 * step)
+            near = (top - one_third, top)
+            mid = (top - 2 * one_third, top - one_third)
+            far = (bottom, top - 2 * one_third)
         else:
-            # تاچ خط پایین: نزدیک پایین، میانی وسط، دور بالا
-            near_zone = (bot_o, bot_o + step)
-            mid_zone = (bot_o + step, bot_o + 2 * step)
-            far_zone = (bot_o + 2 * step, top_o)
+            near = (bottom, bottom + one_third)
+            mid = (bottom + one_third, bottom + 2 * one_third)
+            far = (bottom + 2 * one_third, top)
 
         return {
-            "near": near_zone,
-            "mid": mid_zone,
-            "far": far_zone
+            "near": near,
+            "mid": mid,
+            "far": far,
         }
 
-    # ------------------------------------------------------------------
-    # ۴. تعیین خطوط بنفش (حد سود و حد ضرر) + قانون ۲۵٪ جایگزین
-    # ------------------------------------------------------------------
-    def find_purple_lines(self, df: pd.DataFrame, orange_info: dict) -> dict:
-        """
-        بررسی ۵ کندل واجد شرایط قبلی طبق مدل‌های ۴گانه برگشت
-        و اعمال شرط فاصله ۲۰٪ تا ۲۰۰٪ یا جایگزینی ۲۵٪ عرض منطقه احتیاط
-        """
-        top_orange = orange_info["top_orange"]
-        bot_orange = orange_info["bottom_orange"]
-        caution_width = orange_info["caution_width"]
+    # -------------------------------
+    # تشخیص شکست اولیه و تکمیلی
+    # -------------------------------
+    def detect_breakout(self, df_dict, orange_info):
+        top = orange_info["top_orange"]
+        bottom = orange_info["bottom_orange"]
 
-        # محدوده‌های مجاز فاصله خط بنفش تا خط نارنجی
-        min_distance = 0.20 * caution_width
-        max_distance = 2.00 * caution_width
+        candles = [
+            Candle(t, o, h, l, c)
+            for t, o, h, l, c in zip(
+                df_dict["time"], df_dict["open"], df_dict["high"], df_dict["low"], df_dict["close"]
+            )
+        ]
 
-        valid_purple_above = []
-        valid_purple_below = []
+        breakout_type = "none"
+        closes_outside = 0
+        touched_top_first = None
 
-        # بررسی تاریخی کندل‌ها از قبل از کندل تحلیلی
-        candles = df.iloc[:-1].iloc[::-1]  # حرکت به سمت گذشته
-        count = 0
+        for c in candles:
+            if c.high >= top and touched_top_first is None:
+                touched_top_first = True
+                breakout_type = "initial"
+            if c.low <= bottom and touched_top_first is None:
+                touched_top_first = False
+                breakout_type = "initial"
 
-        for idx in range(len(candles)):
-            if count >= 5:
+            if c.close > top or c.close < bottom:
+                closes_outside += 1
+                if closes_outside >= 2:
+                    breakout_type = "full"
+                    break
+
+        if touched_top_first is None:
+            touched_top_first = True  # پیش‌فرض
+
+        return breakout_type, touched_top_first
+
+    # -------------------------------
+    # پیدا کردن خطوط بنفش (نسخه ساده‌شده ولی مطابق منطق)
+    # -------------------------------
+    def find_purple_lines(self, df_dict, orange_info):
+        top = orange_info["top_orange"]
+        bottom = orange_info["bottom_orange"]
+
+        candles = [
+            Candle(t, o, h, l, c)
+            for t, o, h, l, c in zip(
+                df_dict["time"], df_dict["open"], df_dict["high"], df_dict["low"], df_dict["close"]
+            )
+        ]
+
+        candidates_top = []
+        candidates_bottom = []
+
+        # شرط اول + مدل ساده برگشت/دفع
+        for i in range(len(candles) - 2, -1, -1):
+            c = candles[i]
+
+            cond_top = c.high > top and c.open < top
+            cond_bottom = c.low < bottom and c.open > bottom
+
+            if cond_top:
+                # مدل ساده برگشت: کندل بعدی حداقل 50% بدنه را برگرداند
+                if i + 1 < len(candles):
+                    next_c = candles[i + 1]
+                    if abs(next_c.close - next_c.open) >= 0.5 * c.body:
+                        candidates_top.append(c.high)
+
+            if cond_bottom:
+                if i + 1 < len(candles):
+                    next_c = candles[i + 1]
+                    if abs(next_c.close - next_c.open) >= 0.5 * c.body:
+                        candidates_bottom.append(c.low)
+
+            if len(candidates_top) >= 5 and len(candidates_bottom) >= 5:
                 break
 
-            curr = candles.iloc[idx]
-            high_p, low_p = float(curr['high']), float(curr['low'])
-            open_p, close_p = float(curr['open']), float(curr['close'])
+        purple_top = None
+        purple_bottom = None
 
-            # شرط اول: خارج شدن از محدوده احتیاط
-            condition_1 = (high_p > top_orange and open_p < top_orange) or \
-                          (low_p < bot_orange and open_p > bot_orange)
-
-            if not condition_1:
-                continue
-
-            # شرط دوم: چک کردن مدل‌های برگشت ۴گانه
-            has_reversal = False
-            
-            # مدل اول: برگشت در بدنه خود (ورود/خروج با سایه، کلوز درون محدوده)
-            if (open_p >= bot_orange and open_p <= top_orange) and \
-               (close_p >= bot_orange and close_p <= top_orange):
-                has_reversal = True
-
-            # مدل سوم و چهارم: نیازمند کندل مجاور (راستی)
-            elif idx > 0:
-                prev_in_time = candles.iloc[idx - 1]  # کندل سمت راست
-                prev_close = float(prev_in_time['close'])
-                prev_body = abs(prev_close - float(prev_in_time['open']))
-                curr_body = abs(close_p - open_p)
-
-                # برگشت ۵۰٪ بدنه یا سایه کندل مجاور
-                if prev_body >= 0.5 * curr_body:
-                    has_reversal = True
-
-            if has_reversal:
-                count += 1
-                if high_p > top_orange:
-                    dist = high_p - top_orange
-                    if min_distance <= dist <= max_distance:
-                        valid_purple_above.append(high_p)
-                if low_p < bot_orange:
-                    dist = bot_orange - low_p
-                    if min_distance <= dist <= max_distance:
-                        valid_purple_below.append(low_p)
-
-        # انتخاب نزدیک‌ترین خط بنفش معتبر به خطوط نارنجی
-        purple_top = min(valid_purple_above, key=lambda x: x - top_orange) if valid_purple_above else None
-        purple_bottom = max(valid_purple_below, key=lambda x: bot_orange - x) if valid_purple_below else None
-
-        # اعمال قانون جایگزین (Fallback 25%) در صورت عدم یافتن خط بنفش معتبر
-        if purple_top is None:
-            purple_top = top_orange + (0.25 * caution_width)
-            
-        if purple_bottom is None:
-            purple_bottom = bot_orange - (0.25 * caution_width)
+        if candidates_top:
+            purple_top = min(candidates_top, key=lambda x: abs(x - top))
+        if candidates_bottom:
+            purple_bottom = min(candidates_bottom, key=lambda x: abs(x - bottom))
 
         return {
-            "purple_top": purple_top,
-            "purple_bottom": purple_bottom
+            "purple_top": purple_top if purple_top is not None else top * 1.02,
+            "purple_bottom": purple_bottom if purple_bottom is not None else bottom * 0.98,
+            "top_found_count": len(candidates_top),
+            "bottom_found_count": len(candidates_bottom),
         }
-
-    # ------------------------------------------------------------------
-    # ۵. قیمت‌گذاری سفارش‌های لیمیت (Limit Orders)
-    # ------------------------------------------------------------------
-    def calculate_limit_orders(self, zone_tuple: tuple, total_volume: float, steps: int = 3) -> list:
-        """
-        محاسبه قیمت سفارشات پله‌ای:
-        سفارش اول دقیقاً روی مرز ورود ناحیه و مابقی متوازن در عمق ناحیه
-        """
-        start_p, end_p = zone_tuple
-        prices = np.linspace(start_p, end_p, steps)
-        vol_per_step = total_volume / steps
-
-        orders = []
-        for idx, price in enumerate(prices):
-            orders.append({
-                "step": idx + 1,
-                "price": round(float(price), 5),
-                "volume": round(vol_per_step, 2)
-            })
-        return orders
