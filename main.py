@@ -1,3 +1,4 @@
+
 import flet as ft
 import datetime
 import random
@@ -103,7 +104,6 @@ def fetch_live_ohlc(symbol: str, timeframe: str):
     except Exception:
         pass
 
-    # شبیه‌سازی داده در صورت عدم اتصال
     now = datetime.datetime.now()
     count = 120 if timeframe == "MN1" else (520 if timeframe == "W1" else 500)
     dates = [now - datetime.timedelta(days=i) for i in range(count)]
@@ -141,9 +141,6 @@ def main(page: ft.Page):
         saved_risk = saved_data.get("saved_risk", "40")
         saved_auto_trade = saved_data.get("saved_auto_trade", False)
 
-        # ------------------------------------------------------------------
-        # عناصر منوی اصلی
-        # ------------------------------------------------------------------
         symbol_dropdown = ft.Dropdown(
             label="انتخاب نماد معاملاتی",
             width=260,
@@ -162,11 +159,9 @@ def main(page: ft.Page):
             ],
         )
 
-        # ورودی‌های افزودن نماد جدید
         new_symbol_code = ft.TextField(label="کد نماد (مثلاً USDCHF)", width=180)
         new_symbol_name = ft.TextField(label="نام فارسی (مثلاً دلار/فرانک)", width=220)
 
-        # ورودی‌های تنظیمات
         bot_token_input = ft.TextField(label="Bot Token تلگرام", value=saved_token, password=True, can_reveal_password=True, width=260)
         chat_id_input = ft.TextField(label="Chat ID تلگرام", value=saved_chat_id, width=150)
         risk_input = ft.TextField(label="سقف ریسک (%)", value=saved_risk, width=120)
@@ -201,9 +196,6 @@ def main(page: ft.Page):
             saved_data["history"] = analysis_history
             save_settings_to_file(saved_data)
 
-        # ------------------------------------------------------------------
-        # افزودن نماد جدید
-        # ------------------------------------------------------------------
         def add_new_symbol_action(e):
             code = new_symbol_code.value.strip().upper()
             name = new_symbol_name.value.strip()
@@ -219,7 +211,6 @@ def main(page: ft.Page):
             new_item = {"code": code, "name": f"{name} ({code})"}
             symbols_list.append(new_item)
             
-            # به‌روزرسانی منوی کشویی
             symbol_dropdown.options.append(ft.dropdown.Option(new_item["code"], new_item["name"]))
             symbol_dropdown.value = code
             
@@ -230,9 +221,6 @@ def main(page: ft.Page):
             write_log(f"✅ نماد جدید {code} با موفقیت اضافه و ذخیره شد.")
             page.update()
 
-        # ------------------------------------------------------------------
-        # ایجاد کارت نمایش تحلیل
-        # ------------------------------------------------------------------
         def build_analysis_card(data_dict):
             return ft.Container(
                 content=ft.Column([
@@ -259,7 +247,6 @@ def main(page: ft.Page):
                 )
             )
 
-        # بازنویسی کارت‌های تاریخچه
         def refresh_history_ui():
             history_list_column.controls.clear()
             if not analysis_history:
@@ -272,9 +259,6 @@ def main(page: ft.Page):
 
         refresh_history_ui()
 
-        # ------------------------------------------------------------------
-        # اجرای تحلیل
-        # ------------------------------------------------------------------
         def run_analysis_action(e):
             symbol = symbol_dropdown.value
             timeframe = tf_dropdown.value
@@ -314,11 +298,9 @@ def main(page: ft.Page):
                 "bot_count": purples.get("bottom_found_count", 0),
             }
 
-            # ذخیره در آرشیو
             analysis_history.append(record)
             save_state()
 
-            # به روز رسانی لیست فعلی و تاریخچه
             results_list_column.controls.insert(0, build_analysis_card(record))
             refresh_history_ui()
 
@@ -326,57 +308,54 @@ def main(page: ft.Page):
             page.update()
 
         # ------------------------------------------------------------------
-        # تب‌های برنامه
+        # تب‌های اصلاح‌شده (بدون پارامتر content در سازنده)
         # ------------------------------------------------------------------
-        tab_main = ft.Tab(
-            label="📈 تحلیل و سیگنال",
-            content=ft.Container(
-                content=ft.Column([
-                    ft.Text("۱. انتخاب یا افزودن نماد معاملاتی", size=14, weight="bold"),
-                    ft.Row([symbol_dropdown, tf_dropdown], wrap=True),
-                    
-                    # بخش جدید افزودن نماد
-                    ft.Container(
-                        content=ft.Column([
-                            ft.Text("➕ افزودن نماد جدید به لیست:", size=13, color="#FFB74D"),
-                            ft.Row([new_symbol_code, new_symbol_name, ft.ElevatedButton("ثبت نماد", on_click=add_new_symbol_action)], wrap=True),
-                        ]),
-                        bgcolor="#1E1E1E", padding=10, border_radius=6
-                    ),
 
-                    ft.Divider(),
-                    ft.Text("۲. تنظیمات مدیریت ریسک", size=14, weight="bold"),
-                    ft.Row([risk_input, auto_trade_switch], wrap=True),
-                    ft.Row([bot_token_input, chat_id_input], wrap=True),
-                    ft.ElevatedButton("💾 ذخیره تنظیمات", on_click=lambda e: save_state()),
+        tab_main = ft.Tab(text="📈 تحلیل و سیگنال")
+        tab_history = ft.Tab(text="🗂 تاریخچه تحلیل‌ها")
 
-                    ft.Divider(),
-                    ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, bgcolor="#2E7D32", color="#FFFFFF"),
+        tab_main.content = ft.Container(
+            content=ft.Column([
+                ft.Text("۱. انتخاب یا افزودن نماد معاملاتی", size=14, weight="bold"),
+                ft.Row([symbol_dropdown, tf_dropdown], wrap=True),
+                
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("➕ افزودن نماد جدید به لیست:", size=13, color="#FFB74D"),
+                        ft.Row([new_symbol_code, new_symbol_name, ft.ElevatedButton("ثبت نماد", on_click=add_new_symbol_action)], wrap=True),
+                    ]),
+                    bgcolor="#1E1E1E", padding=10, border_radius=6
+                ),
 
-                    ft.Divider(),
-                    ft.Text("📊 نتیجه آخرین تحلیل:", size=15, weight="bold", color="#FFD700"),
-                    results_list_column,
+                ft.Divider(),
+                ft.Text("۲. تنظیمات مدیریت ریسک", size=14, weight="bold"),
+                ft.Row([risk_input, auto_trade_switch], wrap=True),
+                ft.Row([bot_token_input, chat_id_input], wrap=True),
+                ft.ElevatedButton("💾 ذخیره تنظیمات", on_click=lambda e: save_state()),
 
-                    ft.Divider(),
-                    ft.Text("📜 لاگ عملیات:", size=13, weight="bold"),
-                    log_container,
-                ], spacing=10),
-                padding=10
-            )
+                ft.Divider(),
+                ft.ElevatedButton("🔍 تحلیل و محاسبه زون‌ها", on_click=run_analysis_action, bgcolor="#2E7D32", color="#FFFFFF"),
+
+                ft.Divider(),
+                ft.Text("📊 نتیجه آخرین تحلیل:", size=15, weight="bold", color="#FFD700"),
+                results_list_column,
+
+                ft.Divider(),
+                ft.Text("📜 لاگ عملیات:", size=13, weight="bold"),
+                log_container,
+            ], spacing=10),
+            padding=10
         )
 
-        tab_history = ft.Tab(
-            label="🗂 تاریخچه تحلیل‌ها",
-            content=ft.Container(
-                content=ft.Column([
-                    ft.Row([
-                        ft.Text("📋 آرشیو تمام تحلیل‌های انجام‌شده:", size=15, weight="bold", color="#FFD700"),
-                        ft.ElevatedButton("🧹 پاک‌سازی تاریخچه", on_click=lambda e: (analysis_history.clear(), save_state(), refresh_history_ui(), page.update()))
-                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                    history_list_column,
-                ], spacing=10),
-                padding=10
-            )
+        tab_history.content = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Text("📋 آرشیو تمام تحلیل‌های انجام‌شده:", size=15, weight="bold", color="#FFD700"),
+                    ft.ElevatedButton("🧹 پاک‌سازی تاریخچه", on_click=lambda e: (analysis_history.clear(), save_state(), refresh_history_ui(), page.update()))
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                history_list_column,
+            ], spacing=10),
+            padding=10
         )
 
         tabs_control = ft.Tabs(selected_index=0, animation_duration=300, tabs=[tab_main, tab_history], expand=True)
