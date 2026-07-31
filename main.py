@@ -6,11 +6,7 @@ import json
 import os
 import traceback
 
-# فراخوانی موتور استراتژی
-try:
-    from strategy_engine import SupplyDemandEngine
-except ImportError:
-    SupplyDemandEngine = None
+from strategy_engine import SupplyDemandEngine
 
 SETTINGS_FILE = "mehran_trader_settings.json"
 
@@ -47,9 +43,6 @@ def save_settings_to_file(data):
     except Exception:
         return False
 
-# ------------------------------------------------------------------
-# دریافت داده‌های زنده yFinance
-# ------------------------------------------------------------------
 def fetch_live_ohlc(symbol: str, timeframe: str):
     tf_map = {
         "MN1": ("1mo", "10y"),
@@ -128,9 +121,6 @@ def fetch_live_ohlc(symbol: str, timeframe: str):
         "is_live": False,
     }
 
-# ------------------------------------------------------------------
-# رابط کاربری Flet
-# ------------------------------------------------------------------
 def main(page: ft.Page):
     try:
         page.title = "Mehran Trader - روانشناسی عرضه و تقاضا"
@@ -349,32 +339,13 @@ def main(page: ft.Page):
             current_df = fetch_live_ohlc(symbol, timeframe)
             last_price = current_df["close"][-1]
 
-            if SupplyDemandEngine is not None:
-                engine = SupplyDemandEngine(symbol, timeframe)
-                orange_info = engine.calculate_orange_lines(current_df)
-                zones = engine.calculate_zones(
-                    orange_info, touched_top_first=True
-                )
-                purples = engine.find_purple_lines(current_df, orange_info)
-                monitoring_tf = engine.get_monitoring_timeframe()
-            else:
-                orange_info = {
-                    "category": "تستی",
-                    "top_orange": last_price * 1.01,
-                    "bottom_orange": last_price * 0.99,
-                }
-                zones = {
-                    "near": (last_price * 0.99, last_price * 0.995),
-                    "mid": (last_price * 0.995, last_price * 1.0),
-                    "far": (last_price * 1.0, last_price * 1.01),
-                }
-                purples = {
-                    "purple_top": last_price * 1.02,
-                    "purple_bottom": last_price * 0.98,
-                    "top_found_count": 0,
-                    "bottom_found_count": 0,
-                }
-                monitoring_tf = "H1"
+            engine = SupplyDemandEngine(symbol, timeframe)
+
+            orange_info = engine.calculate_orange_lines(current_df)
+            breakout_type, touched_top_first = engine.detect_breakout(current_df, orange_info)
+            zones = engine.calculate_zones(orange_info, touched_top_first)
+            purples = engine.find_purple_lines(current_df, orange_info)
+            monitoring_tf = engine.get_monitoring_timeframe()
 
             record = {
                 "symbol": symbol,
@@ -394,6 +365,7 @@ def main(page: ft.Page):
                 "purple_bottom": purples["purple_bottom"],
                 "top_count": purples.get("top_found_count", 0),
                 "bot_count": purples.get("bottom_found_count", 0),
+                "breakout_type": breakout_type,
             }
 
             analysis_history.append(record)
@@ -407,9 +379,6 @@ def main(page: ft.Page):
             write_log(f"✅ تحلیل {symbol} ذخیره شد.")
             page.update()
 
-        # ------------------------------------------------------------------
-        # ساختار جدید تب‌ها
-        # ------------------------------------------------------------------
         main_tab_content = ft.Container(
             content=ft.Column(
                 [
