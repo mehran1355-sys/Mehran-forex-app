@@ -1,4 +1,3 @@
-
 import flet as ft
 import datetime
 import random
@@ -308,13 +307,11 @@ def main(page: ft.Page):
             page.update()
 
         # ------------------------------------------------------------------
-        # تب‌های اصلاح‌شده (بدون پارامتر content در سازنده)
+        # ساختار جدید تب‌ها (سازگار با نسخه جدید فلت)
         # ------------------------------------------------------------------
 
-        tab_main = ft.Tab(text="📈 تحلیل و سیگنال")
-        tab_history = ft.Tab(text="🗂 تاریخچه تحلیل‌ها")
-
-        tab_main.content = ft.Container(
+        # محتوای تب اصلی
+        main_tab_content = ft.Container(
             content=ft.Column([
                 ft.Text("۱. انتخاب یا افزودن نماد معاملاتی", size=14, weight="bold"),
                 ft.Row([symbol_dropdown, tf_dropdown], wrap=True),
@@ -347,32 +344,50 @@ def main(page: ft.Page):
             padding=10
         )
 
-        tab_history.content = ft.Container(
+        # محتوای تب تاریخچه
+        history_tab_content = ft.Container(
             content=ft.Column([
                 ft.Row([
                     ft.Text("📋 آرشیو تمام تحلیل‌های انجام‌شده:", size=15, weight="bold", color="#FFD700"),
-                    ft.ElevatedButton("🧹 پاک‌سازی تاریخچه", on_click=lambda e: (analysis_history.clear(), save_state(), refresh_history_ui(), page.update()))
+                    ft.ElevatedButton(
+                        "🧹 پاک‌سازی تاریخچه",
+                        on_click=lambda e: (
+                            analysis_history.clear(),
+                            save_state(),
+                            refresh_history_ui(),
+                            page.update()
+                        )
+                    )
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 history_list_column,
             ], spacing=10),
             padding=10
         )
 
-        tabs_control = ft.Tabs(selected_index=0, animation_duration=300, tabs=[tab_main, tab_history], expand=True)
+        # تعریف تب‌ها (فقط label)
+        tabs = [
+            ft.Tab(label=ft.Text("📈 تحلیل و سیگنال")),
+            ft.Tab(label=ft.Text("🗂 تاریخچه تحلیل‌ها")),
+        ]
 
-        page.add(
-            ft.Text("Mehran Trader - مدیریت عرضه و تقاضا", size=18, weight="bold", color="#FFD700"),
-            tabs_control
+        # ساختار جدید Tabs
+        tabs_control = ft.Tabs(
+            selected_index=0,
+            length=2,
+            expand=True,
+            content=ft.Column(
+                expand=True,
+                controls=[
+                    ft.TabBar(tabs=tabs),
+                    ft.TabBarView(
+                        expand=True,
+                        controls=[
+                            main_tab_content,
+                            history_tab_content,
+                        ],
+                    ),
+                ],
+            ),
         )
 
-    except Exception:
-        err_msg = traceback.format_exc()
-        page.clean()
-        page.add(
-            ft.Text("⚠️ خطایی در اجرا رخ داده است:", color="#FF5252", size=15, weight="bold"),
-            ft.Text(err_msg, color="#FFFFFF", size=11, selectable=True)
-        )
-        page.update()
-
-if __name__ == "__main__":
-    ft.app(target=main)
+        page
