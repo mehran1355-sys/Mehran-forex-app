@@ -310,7 +310,6 @@ def main(page: ft.Page):
         # ساختار جدید تب‌ها (سازگار با نسخه جدید فلت)
         # ------------------------------------------------------------------
 
-        # محتوای تب اصلی
         main_tab_content = ft.Container(
             content=ft.Column([
                 ft.Text("۱. انتخاب یا افزودن نماد معاملاتی", size=14, weight="bold"),
@@ -344,7 +343,6 @@ def main(page: ft.Page):
             padding=10
         )
 
-        # محتوای تب تاریخچه
         history_tab_content = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -364,13 +362,11 @@ def main(page: ft.Page):
             padding=10
         )
 
-        # تعریف تب‌ها (فقط label)
         tabs = [
             ft.Tab(label=ft.Text("📈 تحلیل و سیگنال")),
             ft.Tab(label=ft.Text("🗂 تاریخچه تحلیل‌ها")),
         ]
 
-        # ساختار جدید Tabs
         tabs_control = ft.Tabs(
             selected_index=0,
             length=2,
@@ -390,4 +386,13 @@ def main(page: ft.Page):
             ),
         )
 
-        page
+        page.add(
+            ft.Text("Mehran Trader - مدیریت عرضه و تقاضا", size=18, weight="bold", color="#FFD700"),
+            tabs_control
+        )
+
+    except Exception:
+        err_msg = traceback.format_exc()
+        page.clean()
+        page.add(
+            ft.Text("⚠️ خطایی در اجرا رخ داده است:", color="#
