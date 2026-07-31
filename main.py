@@ -6,7 +6,7 @@ import json
 import os
 import traceback
 
-from strategy_engine import SupplyDemandEngine
+from strategy_engine.py import SupplyDemandEngine
 
 SETTINGS_FILE = "mehran_trader_settings.json"
 
