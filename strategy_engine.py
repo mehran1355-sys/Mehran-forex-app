@@ -111,8 +111,15 @@ class SupplyDemandEngine:
         top_orange = max(line1, line2)
         bottom_orange = min(line1, line2)
 
+        category_map = {
+            "very_long": "کندل خیلی بلند",
+            "long": "کندل بلند",
+            "short": "کندل کوتاه",
+            "very_short": "کندل خیلی کوتاه",
+        }
+
         return {
-            "category": candle_type,
+            "category": category_map.get(candle_type, candle_type),
             "top_orange": top_orange,
             "bottom_orange": bottom_orange,
         }
