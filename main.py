@@ -3,25 +3,32 @@ import datetime
 import json
 import os
 import traceback
-import MetaTrader5 as mt5
 import requests
-
-from strategy_engine import SupplyDemandEngine
 
 SETTINGS_FILE = "mehran_trader_settings.json"
 
+# -------------------------------
+#  اتصال به سرور FastAPI
+# -------------------------------
+API_URL = "http://10.250.30.105:8000"   # آدرس سرور تو
 
-def send_telegram_message(token, chat_id, text):
+
+def analyze_from_server(symbol, timeframe):
     try:
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
-        r = requests.post(url, json=payload, timeout=5)
-        return r.status_code == 200
+        response = requests.post(
+            f"{API_URL}/analyze",
+            json={"symbol": symbol, "timeframe": timeframe},
+            timeout=10
+        )
+        return response.json()
     except Exception as e:
-        print("Telegram Error:", e)
-        return False
+        print("Server Error:", e)
+        return None
 
 
+# -------------------------------
+#  ذخیره‌سازی و بارگذاری تنظیمات
+# -------------------------------
 def load_settings():
     try:
         if os.path.exists(SETTINGS_FILE):
@@ -46,47 +53,9 @@ def save_settings_to_file(data):
         return False
 
 
-def connect_mt5():
-    if not mt5.initialize():
-        print("❌ اتصال به MT5 برقرار نشد")
-        return False
-    print("✅ اتصال به MT5 برقرار شد")
-    return True
-
-
-def symbol_exists_mt5(symbol):
-    info = mt5.symbol_info(symbol)
-    return info is not None
-
-
-def fetch_mt5_ohlc(symbol, timeframe, count=500):
-    tf_map = {
-        "MN1": mt5.TIMEFRAME_MN1,
-        "W1": mt5.TIMEFRAME_W1,
-        "D1": mt5.TIMEFRAME_D1,
-        "H4": mt5.TIMEFRAME_H4,
-        "H1": mt5.TIMEFRAME_H1,
-    }
-
-    tf = tf_map.get(timeframe, mt5.TIMEFRAME_D1)
-
-    rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
-
-    if rates is None:
-        return None
-
-    df = {
-        "time": [datetime.datetime.fromtimestamp(r['time']) for r in rates],
-        "open": [r['open'] for r in rates],
-        "high": [r['high'] for r in rates],
-        "low": [r['low'] for r in rates],
-        "close": [r['close'] for r in rates],
-        "is_live": True
-    }
-
-    return df
-
-
+# -------------------------------
+#  اپلیکیشن اصلی Flet
+# -------------------------------
 def main(page: ft.Page):
     try:
         page.title = "Mehran Trader - MT5"
@@ -94,13 +63,6 @@ def main(page: ft.Page):
         page.rtl = True
         page.padding = 12
         page.scroll = "auto"
-
-        if not connect_mt5():
-            page.add(
-                ft.Text("❌ اتصال به MT5 برقرار نشد. لطفاً MT5 را باز و لاگین کن.", color="#FF5252")
-            )
-            page.update()
-            return
 
         saved_data = load_settings()
         symbols_list = saved_data.get("symbols", [])
@@ -113,6 +75,9 @@ def main(page: ft.Page):
         saved_risk = saved_data.get("saved_risk", "40")
         saved_auto_trade = saved_data.get("saved_auto_trade", False)
 
+        # -------------------------------
+        #  UI بخش نمادها
+        # -------------------------------
         symbol_dropdown = ft.Dropdown(
             label="انتخاب نماد معاملاتی",
             width=260,
@@ -136,6 +101,9 @@ def main(page: ft.Page):
         new_symbol_code = ft.TextField(label="کد نماد (مثلاً EURUSD)", width=180)
         new_symbol_name = ft.TextField(label="نام فارسی (مثلاً یورو/دلار)", width=220)
 
+        # -------------------------------
+        #  UI بخش تلگرام و ریسک
+        # -------------------------------
         bot_token_input = ft.TextField(
             label="Bot Token تلگرام",
             value=saved_token,
@@ -151,6 +119,9 @@ def main(page: ft.Page):
         risk_input = ft.TextField(label="سقف ریسک (%)", value=saved_risk, width=120)
         auto_trade_switch = ft.Switch(label="معامله خودکار", value=saved_auto_trade)
 
+        # -------------------------------
+        #  لاگ
+        # -------------------------------
         log_box = ft.Text(value="سیستم آماده به کار است.\n", color="#81C784", size=12)
         log_container = ft.Container(
             content=ft.Column([log_box], scroll="auto"),
@@ -180,20 +151,15 @@ def main(page: ft.Page):
             saved_data["history"] = analysis_history
             save_settings_to_file(saved_data)
 
+        # -------------------------------
+        #  افزودن نماد جدید
+        # -------------------------------
         def add_new_symbol_action(e):
             code = new_symbol_code.value.strip().upper()
             name = new_symbol_name.value.strip()
 
             if not code or not name:
                 write_log("⚠️ کد و نام نماد را وارد کنید.", is_error=True)
-                return
-
-            if not symbol_exists_mt5(code):
-                write_log("❌ این نماد در MT5 وجود ندارد.", is_error=True)
-                return
-
-            if any(s["code"] == code for s in symbols_list):
-                write_log(f"⚠️ نماد {code} قبلاً موجود است.", is_error=True)
                 return
 
             new_item = {"code": code, "name": f"{name} ({code})"}
@@ -211,6 +177,9 @@ def main(page: ft.Page):
             write_log(f"✅ نماد {code} با موفقیت اضافه شد.")
             page.update()
 
+        # -------------------------------
+        #  حذف نماد
+        # -------------------------------
         def remove_symbol_action(e):
             code = symbol_dropdown.value
             if not code:
@@ -227,6 +196,9 @@ def main(page: ft.Page):
             write_log(f"🗑 نماد {code} حذف شد.")
             page.update()
 
+        # -------------------------------
+        #  ساخت کارت تحلیل
+        # -------------------------------
         def build_analysis_card(data_dict):
             return ft.Container(
                 content=ft.Column(
@@ -284,17 +256,17 @@ def main(page: ft.Page):
                             color="#E57373",
                         ),
                         ft.Text(
-                            f"🟪 حد سود دوم (TP2): {data_dict['purple_top']:.5f} (یافت‌شده: {data_dict.get('top_count', 0)})",
+                            f"🟪 حد سود دوم (TP2): {data_dict['purple_top']:.5f}",
                             size=13,
                             color="#BA68C8",
                         ),
                         ft.Text(
-                            f"⛔ حد ضرر (SL): {data_dict['purple_bottom']:.5f} (یافت‌شده: {data_dict.get('bottom_count', 0)})",
+                            f"⛔ حد ضرر (SL): {data_dict['purple_bottom']:.5f}",
                             size=13,
                             color="#E57373",
                         ),
                         ft.Text(
-                            f"📉 نوع شکست: {data_dict.get('breakout_type', 'نامشخص')}",
+                            f"📉 نوع شکست: {data_dict['breakout_type']}",
                             size=12,
                             color="#90CAF9",
                         ),
@@ -304,14 +276,11 @@ def main(page: ft.Page):
                 bgcolor="#212121",
                 padding=12,
                 border_radius=8,
-                border=ft.Border(
-                    top=ft.BorderSide(1, "#424242"),
-                    bottom=ft.BorderSide(1, "#424242"),
-                    left=ft.BorderSide(1, "#424242"),
-                    right=ft.BorderSide(1, "#424242"),
-                ),
             )
 
+        # -------------------------------
+        #  تاریخچه تحلیل‌ها
+        # -------------------------------
         def refresh_history_ui():
             history_list_column.controls.clear()
             if not analysis_history:
@@ -328,6 +297,9 @@ def main(page: ft.Page):
 
         refresh_history_ui()
 
+        # -------------------------------
+        #  اجرای تحلیل از سرور
+        # -------------------------------
         def run_analysis_action(e):
             symbol = symbol_dropdown.value
             timeframe = tf_dropdown.value
@@ -336,76 +308,27 @@ def main(page: ft.Page):
                 write_log("⚠️ ابتدا یک نماد انتخاب کنید.", is_error=True)
                 return
 
-            write_log(f"📡 در حال دریافت داده‌ها و تحلیل {symbol} [{timeframe}]...")
+            write_log(f"📡 در حال ارسال درخواست تحلیل به سرور...")
 
-            current_df = fetch_mt5_ohlc(symbol, timeframe)
-            if current_df is None:
-                write_log("❌ داده‌ای از MT5 دریافت نشد.", is_error=True)
+            result = analyze_from_server(symbol, timeframe)
+
+            if result is None:
+                write_log("❌ ارتباط با سرور برقرار نشد.", is_error=True)
                 return
 
-            last_price = current_df["close"][-1]
-
-            engine = SupplyDemandEngine(symbol, timeframe)
-
-            orange_info = engine.calculate_orange_lines(current_df)
-            breakout_type, touched_top_first = engine.detect_breakout(current_df, orange_info)
-            zones = engine.calculate_zones(orange_info, touched_top_first)
-            purples = engine.find_purple_lines(current_df, orange_info)
-            monitoring_tf = engine.get_monitoring_timeframe()
-
-            record = {
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "monitoring_tf": monitoring_tf,
-                "date_str": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "last_price": last_price,
-                "category": orange_info["category"],
-                "top_orange": orange_info["top_orange"],
-                "bottom_orange": orange_info["bottom_orange"],
-                "near": zones["near"],
-                "mid": zones["mid"],
-                "far": zones["far"],
-                "purple_top": purples["purple_top"],
-                "purple_bottom": purples["purple_bottom"],
-                "top_count": purples.get("top_found_count", 0),
-                "bottom_count": purples.get("bottom_found_count", 0),
-                "breakout_type": breakout_type,
-            }
-
+            record = result
             analysis_history.append(record)
             save_state()
 
             results_list_column.controls.insert(0, build_analysis_card(record))
             refresh_history_ui()
 
-            msg = (
-                f"📊 تحلیل جدید نماد <b>{symbol}</b> در تایم‌فریم <b>{timeframe}</b>\n\n"
-                f"💰 قیمت فعلی: <b>{last_price:.5f}</b>\n"
-                f"🏷 دسته کندل: <b>{orange_info['category']}</b>\n\n"
-                f"🟧 خط نارنجی بالا: <b>{orange_info['top_orange']:.5f}</b>\n"
-                f"🟧 خط نارنجی پایین: <b>{orange_info['bottom_orange']:.5f}</b>\n\n"
-                f"🟪 حد سود دوم (TP2): <b>{purples['purple_top']:.5f}</b>\n"
-                f"⛔ حد ضرر (SL): <b>{purples['purple_bottom']:.5f}</b>\n\n"
-                f"📉 نوع شکست: {breakout_type}\n"
-                f"⏱ زمان تحلیل: {record['date_str']}"
-            )
-
-            if saved_data.get("saved_token") and saved_data.get("saved_chat_id"):
-                success = send_telegram_message(
-                    saved_data["saved_token"],
-                    saved_data["saved_chat_id"],
-                    msg,
-                )
-                if success:
-                    write_log("📨 پیام تلگرام با موفقیت ارسال شد.")
-                else:
-                    write_log("⚠️ پیام تلگرام ارسال نشد. توکن یا Chat ID اشتباه است.", is_error=True)
-            else:
-                write_log("⚠️ تنظیمات تلگرام وارد نشده است.", is_error=True)
-
             write_log(f"✅ تحلیل {symbol} ذخیره شد.")
             page.update()
 
+        # -------------------------------
+        #  UI نهایی
+        # -------------------------------
         main_tab_content = ft.Container(
             content=ft.Column(
                 [
