@@ -1,50 +1,41 @@
 import flet as ft
 import datetime
-import random
-import urllib.request
 import json
 import os
 import traceback
+import MetaTrader5 as mt5
 import requests
 
 from strategy_engine import SupplyDemandEngine
 
 SETTINGS_FILE = "mehran_trader_settings.json"
 
-DEFAULT_SYMBOLS = [
-    {"code": "XAUUSD", "name": "طلا (XAUUSD)"},
-    {"code": "EURUSD", "name": "یورو / دلار (EURUSD)"},
-    {"code": "GBPUSD", "name": "پوند / دلار (GBPUSD)"},
-    {"code": "USDJPY", "name": "دلار / ین (USDJPY)"},
-    {"code": "AUDUSD", "name": "دلار استرالیا / دلار (AUDUSD)"},
-    {"code": "USDCAD", "name": "دلار / دلار کانادا (USDCAD)"},
-    {"code": "GBPJPY", "name": "پوند / ین (GBPJPY)"},
-    {"code": "BTCUSD", "name": "بیت‌کوین (BTCUSD)"},
-]
 
 def send_telegram_message(token, chat_id, text):
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
-        r = requests.post(url, json=payload)
+        r = requests.post(url, json=payload, timeout=5)
         return r.status_code == 200
     except Exception as e:
         print("Telegram Error:", e)
         return False
+
 
 def load_settings():
     try:
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if "symbols" not in data or not data["symbols"]:
-                    data["symbols"] = DEFAULT_SYMBOLS
+                if "symbols" not in data:
+                    data["symbols"] = []
                 if "history" not in data:
                     data["history"] = []
                 return data
     except Exception:
         pass
-    return {"symbols": DEFAULT_SYMBOLS, "history": []}
+    return {"symbols": [], "history": []}
+
 
 def save_settings_to_file(data):
     try:
@@ -54,93 +45,68 @@ def save_settings_to_file(data):
     except Exception:
         return False
 
-def fetch_live_ohlc(symbol: str, timeframe: str):
-    tf_map = {"MN1": ("1mo", "10y"), "W1": ("1wk", "10y"), "D1": ("1d", "2y")}
-    interval, period = tf_map.get(timeframe, ("1d", "2y"))
 
-    formatted_symbol = symbol.strip().upper()
-    if formatted_symbol == "XAUUSD":
-        formatted_symbol = "XAUUSD=X"
-    elif formatted_symbol in ["BTCUSD", "BTC"]:
-        formatted_symbol = "BTC-USD"
-    elif formatted_symbol in ["ETHUSD", "ETH"]:
-        formatted_symbol = "ETH-USD"
-    elif not formatted_symbol.endswith("=X") and len(formatted_symbol) == 6:
-        formatted_symbol = f"{formatted_symbol}=X"
+def connect_mt5():
+    if not mt5.initialize():
+        print("❌ اتصال به MT5 برقرار نشد")
+        return False
+    print("✅ اتصال به MT5 برقرار شد")
+    return True
 
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{formatted_symbol}?interval={interval}&range={period}"
-    headers = {"User-Agent": "Mozilla/5.0"}
 
-    try:
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status == 200:
-                data = json.loads(response.read().decode("utf-8"))
-                result = data["chart"]["result"][0]
-                timestamps = result["timestamp"]
-                quote = result["indicators"]["quote"][0]
+def symbol_exists_mt5(symbol):
+    info = mt5.symbol_info(symbol)
+    return info is not None
 
-                opens, highs, lows, closes = (
-                    quote["open"],
-                    quote["high"],
-                    quote["low"],
-                    quote["close"],
-                )
 
-                clean_dates, clean_open, clean_high, clean_low, clean_close = [], [], [], [], []
-                for i in range(len(timestamps)):
-                    if (
-                        closes[i] is not None
-                        and opens[i] is not None
-                        and highs[i] is not None
-                        and lows[i] is not None
-                    ):
-                        clean_dates.append(datetime.datetime.fromtimestamp(timestamps[i]))
-                        clean_open.append(opens[i])
-                        clean_high.append(highs[i])
-                        clean_low.append(lows[i])
-                        clean_close.append(closes[i])
-
-                if clean_close:
-                    return {
-                        "time": clean_dates,
-                        "open": clean_open,
-                        "high": clean_high,
-                        "low": clean_low,
-                        "close": clean_close,
-                        "is_live": True,
-                    }
-    except Exception:
-        pass
-
-    now = datetime.datetime.now()
-    count = 120 if timeframe == "MN1" else (520 if timeframe == "W1" else 500)
-    dates = [now - datetime.timedelta(days=i) for i in range(count)]
-    dates.reverse()
-    base_price = 2350.0 if "XAU" in symbol else 1.0800
-    closes = [base_price + random.uniform(-20, 20) for _ in range(count)]
-    return {
-        "time": dates,
-        "open": closes,
-        "high": [c + 10 for c in closes],
-        "low": [c - 10 for c in closes],
-        "close": closes,
-        "is_live": False,
+def fetch_mt5_ohlc(symbol, timeframe, count=500):
+    tf_map = {
+        "MN1": mt5.TIMEFRAME_MN1,
+        "W1": mt5.TIMEFRAME_W1,
+        "D1": mt5.TIMEFRAME_D1,
+        "H4": mt5.TIMEFRAME_H4,
+        "H1": mt5.TIMEFRAME_H1,
     }
+
+    tf = tf_map.get(timeframe, mt5.TIMEFRAME_D1)
+
+    rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
+
+    if rates is None:
+        return None
+
+    df = {
+        "time": [datetime.datetime.fromtimestamp(r['time']) for r in rates],
+        "open": [r['open'] for r in rates],
+        "high": [r['high'] for r in rates],
+        "low": [r['low'] for r in rates],
+        "close": [r['close'] for r in rates],
+        "is_live": True
+    }
+
+    return df
+
 
 def main(page: ft.Page):
     try:
-        page.title = "Mehran Trader - روانشناسی عرضه و تقاضا"
+        page.title = "Mehran Trader - MT5"
         page.theme_mode = "dark"
         page.rtl = True
         page.padding = 12
         page.scroll = "auto"
 
+        if not connect_mt5():
+            page.add(
+                ft.Text("❌ اتصال به MT5 برقرار نشد. لطفاً MT5 را باز و لاگین کن.", color="#FF5252")
+            )
+            page.update()
+            return
+
         saved_data = load_settings()
-        symbols_list = saved_data.get("symbols", DEFAULT_SYMBOLS)
+        symbols_list = saved_data.get("symbols", [])
         analysis_history = saved_data.get("history", [])
 
-        saved_symbol = saved_data.get("saved_symbol", symbols_list[0]["code"])
+        saved_symbol = saved_data.get("saved_symbol", symbols_list[0]["code"] if symbols_list else "")
         saved_tf = saved_data.get("saved_tf", "D1")
         saved_token = saved_data.get("saved_token", "")
         saved_chat_id = saved_data.get("saved_chat_id", "")
@@ -150,8 +116,10 @@ def main(page: ft.Page):
         symbol_dropdown = ft.Dropdown(
             label="انتخاب نماد معاملاتی",
             width=260,
-            value=saved_symbol,
-            options=[ft.dropdown.Option(item["code"], item["name"]) for item in symbols_list],
+            value=saved_symbol if saved_symbol else None,
+            options=[
+                ft.dropdown.Option(item["code"], item["name"]) for item in symbols_list
+            ],
         )
 
         tf_dropdown = ft.Dropdown(
@@ -165,8 +133,8 @@ def main(page: ft.Page):
             ],
         )
 
-        new_symbol_code = ft.TextField(label="کد نماد", width=180)
-        new_symbol_name = ft.TextField(label="نام فارسی", width=220)
+        new_symbol_code = ft.TextField(label="کد نماد (مثلاً EURUSD)", width=180)
+        new_symbol_name = ft.TextField(label="نام فارسی (مثلاً یورو/دلار)", width=220)
 
         bot_token_input = ft.TextField(
             label="Bot Token تلگرام",
@@ -217,15 +185,20 @@ def main(page: ft.Page):
             name = new_symbol_name.value.strip()
 
             if not code or not name:
-                write_log("لطفاً کد و نام نماد را وارد کنید.", is_error=True)
+                write_log("⚠️ کد و نام نماد را وارد کنید.", is_error=True)
+                return
+
+            if not symbol_exists_mt5(code):
+                write_log("❌ این نماد در MT5 وجود ندارد.", is_error=True)
                 return
 
             if any(s["code"] == code for s in symbols_list):
-                write_log(f"نماد {code} قبلاً موجود است.", is_error=True)
+                write_log(f"⚠️ نماد {code} قبلاً موجود است.", is_error=True)
                 return
 
             new_item = {"code": code, "name": f"{name} ({code})"}
             symbols_list.append(new_item)
+
             symbol_dropdown.options.append(
                 ft.dropdown.Option(new_item["code"], new_item["name"])
             )
@@ -235,7 +208,23 @@ def main(page: ft.Page):
             new_symbol_name.value = ""
 
             save_state()
-            write_log(f"نماد جدید {code} اضافه شد.")
+            write_log(f"✅ نماد {code} با موفقیت اضافه شد.")
+            page.update()
+
+        def remove_symbol_action(e):
+            code = symbol_dropdown.value
+            if not code:
+                write_log("⚠️ نمادی برای حذف انتخاب نشده است.", is_error=True)
+                return
+
+            symbols_list[:] = [s for s in symbols_list if s["code"] != code]
+            symbol_dropdown.options[:] = [
+                ft.dropdown.Option(s["code"], s["name"]) for s in symbols_list
+            ]
+            symbol_dropdown.value = symbols_list[0]["code"] if symbols_list else None
+
+            save_state()
+            write_log(f"🗑 نماد {code} حذف شد.")
             page.update()
 
         def build_analysis_card(data_dict):
@@ -259,7 +248,7 @@ def main(page: ft.Page):
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
                         ft.Text(
-                            f"💰 آخرین قیمت: {data_dict['last_price']:.4f}",
+                            f"💰 آخرین قیمت: {data_dict['last_price']:.5f}",
                             size=13,
                             color="#64B5F6",
                             weight="bold",
@@ -270,37 +259,37 @@ def main(page: ft.Page):
                             color="#FFFFFF",
                         ),
                         ft.Text(
-                            f"🟧 خط نارنجی بالا: {data_dict['top_orange']:.4f}",
+                            f"🟧 خط نارنجی بالا: {data_dict['top_orange']:.5f}",
                             size=13,
                             color="#FFA726",
                         ),
                         ft.Text(
-                            f"🟧 خط نارنجی پایین: {data_dict['bottom_orange']:.4f}",
+                            f"🟧 خط نارنجی پایین: {data_dict['bottom_orange']:.5f}",
                             size=13,
                             color="#FFA726",
                         ),
                         ft.Text(
-                            f"🟢 ۱/۳ نزدیک: {data_dict['near'][0]:.4f} تا {data_dict['near'][1]:.4f}",
+                            f"🟢 ۱/۳ نزدیک: {data_dict['near'][0]:.5f} تا {data_dict['near'][1]:.5f}",
                             size=12,
                             color="#81C784",
                         ),
                         ft.Text(
-                            f"🟡 ۱/۳ میانی: {data_dict['mid'][0]:.4f} تا {data_dict['mid'][1]:.4f}",
+                            f"🟡 ۱/۳ میانی: {data_dict['mid'][0]:.5f} تا {data_dict['mid'][1]:.5f}",
                             size=12,
                             color="#FFF176",
                         ),
                         ft.Text(
-                            f"🔴 ۱/۳ دور: {data_dict['far'][0]:.4f} تا {data_dict['far'][1]:.4f}",
+                            f"🔴 ۱/۳ دور: {data_dict['far'][0]:.5f} تا {data_dict['far'][1]:.5f}",
                             size=12,
                             color="#E57373",
                         ),
                         ft.Text(
-                            f"🟪 حد سود دوم (TP2): {data_dict['purple_top']:.4f} (یافت‌شده: {data_dict.get('top_count', 0)})",
+                            f"🟪 حد سود دوم (TP2): {data_dict['purple_top']:.5f} (یافت‌شده: {data_dict.get('top_count', 0)})",
                             size=13,
                             color="#BA68C8",
                         ),
                         ft.Text(
-                            f"⛔ حد ضرر (SL): {data_dict['purple_bottom']:.4f} (یافت‌شده: {data_dict.get('bottom_count', 0)})",
+                            f"⛔ حد ضرر (SL): {data_dict['purple_bottom']:.5f} (یافت‌شده: {data_dict.get('bottom_count', 0)})",
                             size=13,
                             color="#E57373",
                         ),
@@ -343,9 +332,17 @@ def main(page: ft.Page):
             symbol = symbol_dropdown.value
             timeframe = tf_dropdown.value
 
+            if not symbol:
+                write_log("⚠️ ابتدا یک نماد انتخاب کنید.", is_error=True)
+                return
+
             write_log(f"📡 در حال دریافت داده‌ها و تحلیل {symbol} [{timeframe}]...")
 
-            current_df = fetch_live_ohlc(symbol, timeframe)
+            current_df = fetch_mt5_ohlc(symbol, timeframe)
+            if current_df is None:
+                write_log("❌ داده‌ای از MT5 دریافت نشد.", is_error=True)
+                return
+
             last_price = current_df["close"][-1]
 
             engine = SupplyDemandEngine(symbol, timeframe)
@@ -383,12 +380,12 @@ def main(page: ft.Page):
 
             msg = (
                 f"📊 تحلیل جدید نماد <b>{symbol}</b> در تایم‌فریم <b>{timeframe}</b>\n\n"
-                f"💰 قیمت فعلی: <b>{last_price:.4f}</b>\n"
+                f"💰 قیمت فعلی: <b>{last_price:.5f}</b>\n"
                 f"🏷 دسته کندل: <b>{orange_info['category']}</b>\n\n"
-                f"🟧 خط نارنجی بالا: <b>{orange_info['top_orange']:.4f}</b>\n"
-                f"🟧 خط نارنجی پایین: <b>{orange_info['bottom_orange']:.4f}</b>\n\n"
-                f"🟪 حد سود دوم (TP2): <b>{purples['purple_top']:.4f}</b>\n"
-                f"⛔ حد ضرر (SL): <b>{purples['purple_bottom']:.4f}</b>\n\n"
+                f"🟧 خط نارنجی بالا: <b>{orange_info['top_orange']:.5f}</b>\n"
+                f"🟧 خط نارنجی پایین: <b>{orange_info['bottom_orange']:.5f}</b>\n\n"
+                f"🟪 حد سود دوم (TP2): <b>{purples['purple_top']:.5f}</b>\n"
+                f"⛔ حد ضرر (SL): <b>{purples['purple_bottom']:.5f}</b>\n\n"
                 f"📉 نوع شکست: {breakout_type}\n"
                 f"⏱ زمان تحلیل: {record['date_str']}"
             )
@@ -413,7 +410,14 @@ def main(page: ft.Page):
             content=ft.Column(
                 [
                     ft.Text("۱. انتخاب یا افزودن نماد معاملاتی", size=14, weight="bold"),
-                    ft.Row([symbol_dropdown, tf_dropdown], wrap=True),
+                    ft.Row(
+                        [
+                            symbol_dropdown,
+                            tf_dropdown,
+                            ft.ElevatedButton("🗑 حذف نماد انتخاب‌شده", on_click=remove_symbol_action),
+                        ],
+                        wrap=True,
+                    ),
                     ft.Container(
                         content=ft.Column(
                             [
@@ -433,7 +437,7 @@ def main(page: ft.Page):
                         border_radius=6,
                     ),
                     ft.Divider(),
-                    ft.Text("۲. تنظیمات مدیریت ریسک", size=14, weight="bold"),
+                    ft.Text("۲. تنظیمات مدیریت ریسک و تلگرام", size=14, weight="bold"),
                     ft.Row([risk_input, auto_trade_switch], wrap=True),
                     ft.Row([bot_token_input, chat_id_input], wrap=True),
                     ft.ElevatedButton("💾 ذخیره تنظیمات", on_click=lambda e: save_state()),
@@ -512,7 +516,7 @@ def main(page: ft.Page):
 
         page.add(
             ft.Text(
-                "Mehran Trader - مدیریت عرضه و تقاضا",
+                "Mehran Trader - MT5 Supply/Demand",
                 size=18,
                 weight="bold",
                 color="#FFD700",
@@ -538,6 +542,7 @@ def main(page: ft.Page):
             ),
         )
         page.update()
+
 
 if __name__ == "__main__":
     ft.app(target=main)
