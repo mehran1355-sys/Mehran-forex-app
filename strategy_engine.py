@@ -218,4 +218,4 @@ class SupplyDemandEngine:
             "purple_bottom": purple_bottom,
             "top_found_count": len(candidates_top),
             "bottom_found_count": len(candidates_bottom),
-        }
+                 }
