@@ -168,13 +168,29 @@ def main(page: ft.Page):
         new_symbol_code = ft.TextField(label="کد نماد", width=180)
         new_symbol_name = ft.TextField(label="نام فارسی", width=220)
 
-        bot_token_input = ft.TextField(label="Bot Token تلگرام", value=saved_token, password=True, can_reveal_password=True, width=260)
-        chat_id_input = ft.TextField(label="Chat ID تلگرام", value=saved_chat_id, width=150)
+        bot_token_input = ft.TextField(
+            label="Bot Token تلگرام",
+            value=saved_token,
+            password=True,
+            can_reveal_password=True,
+            width=260,
+        )
+        chat_id_input = ft.TextField(
+            label="Chat ID تلگرام",
+            value=saved_chat_id,
+            width=150,
+        )
         risk_input = ft.TextField(label="سقف ریسک (%)", value=saved_risk, width=120)
         auto_trade_switch = ft.Switch(label="معامله خودکار", value=saved_auto_trade)
 
         log_box = ft.Text(value="سیستم آماده به کار است.\n", color="#81C784", size=12)
-        log_container = ft.Container(content=ft.Column([log_box], scroll="auto"), bgcolor="#1A1A1A", border_radius=8, padding=10, height=120)
+        log_container = ft.Container(
+            content=ft.Column([log_box], scroll="auto"),
+            bgcolor="#1A1A1A",
+            border_radius=8,
+            padding=10,
+            height=120,
+        )
 
         results_list_column = ft.Column([], spacing=10)
         history_list_column = ft.Column([], spacing=10)
@@ -210,7 +226,9 @@ def main(page: ft.Page):
 
             new_item = {"code": code, "name": f"{name} ({code})"}
             symbols_list.append(new_item)
-            symbol_dropdown.options.append(ft.dropdown.Option(new_item["code"], new_item["name"]))
+            symbol_dropdown.options.append(
+                ft.dropdown.Option(new_item["code"], new_item["name"])
+            )
             symbol_dropdown.value = code
 
             new_symbol_code.value = ""
@@ -221,3 +239,305 @@ def main(page: ft.Page):
             page.update()
 
         def build_analysis_card(data_dict):
+            return ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.Text(
+                                    f"📌 {data_dict['symbol']} [{data_dict['timeframe']}] ➔ مانیتورینگ: [{data_dict['monitoring_tf']}]",
+                                    size=14,
+                                    weight="bold",
+                                    color="#FFD700",
+                                ),
+                                ft.Text(
+                                    f"⏱ {data_dict['date_str']}",
+                                    size=11,
+                                    color="#B0BEC5",
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(
+                            f"💰 آخرین قیمت: {data_dict['last_price']:.4f}",
+                            size=13,
+                            color="#64B5F6",
+                            weight="bold",
+                        ),
+                        ft.Text(
+                            f"🏷 دسته کندل تحلیلی: {data_dict['category']}",
+                            size=13,
+                            color="#FFFFFF",
+                        ),
+                        ft.Text(
+                            f"🟧 خط نارنجی بالا: {data_dict['top_orange']:.4f}",
+                            size=13,
+                            color="#FFA726",
+                        ),
+                        ft.Text(
+                            f"🟧 خط نارنجی پایین: {data_dict['bottom_orange']:.4f}",
+                            size=13,
+                            color="#FFA726",
+                        ),
+                        ft.Text(
+                            f"🟢 ۱/۳ نزدیک: {data_dict['near'][0]:.4f} تا {data_dict['near'][1]:.4f}",
+                            size=12,
+                            color="#81C784",
+                        ),
+                        ft.Text(
+                            f"🟡 ۱/۳ میانی: {data_dict['mid'][0]:.4f} تا {data_dict['mid'][1]:.4f}",
+                            size=12,
+                            color="#FFF176",
+                        ),
+                        ft.Text(
+                            f"🔴 ۱/۳ دور: {data_dict['far'][0]:.4f} تا {data_dict['far'][1]:.4f}",
+                            size=12,
+                            color="#E57373",
+                        ),
+                        ft.Text(
+                            f"🟪 حد سود دوم (TP2): {data_dict['purple_top']:.4f} (یافت‌شده: {data_dict.get('top_count', 0)})",
+                            size=13,
+                            color="#BA68C8",
+                        ),
+                        ft.Text(
+                            f"⛔ حد ضرر (SL): {data_dict['purple_bottom']:.4f} (یافت‌شده: {data_dict.get('bottom_count', 0)})",
+                            size=13,
+                            color="#E57373",
+                        ),
+                        ft.Text(
+                            f"📉 نوع شکست: {data_dict.get('breakout_type', 'نامشخص')}",
+                            size=12,
+                            color="#90CAF9",
+                        ),
+                    ],
+                    spacing=5,
+                ),
+                bgcolor="#212121",
+                padding=12,
+                border_radius=8,
+                border=ft.Border(
+                    top=ft.BorderSide(1, "#424242"),
+                    bottom=ft.BorderSide(1, "#424242"),
+                    left=ft.BorderSide(1, "#424242"),
+                    right=ft.BorderSide(1, "#424242"),
+                ),
+            )
+
+        def refresh_history_ui():
+            history_list_column.controls.clear()
+            if not analysis_history:
+                history_list_column.controls.append(
+                    ft.Text(
+                        "هیچ تحلیلی در تاریخچه ثبت نشده است.",
+                        color="#757575",
+                        size=13,
+                    )
+                )
+            else:
+                for item in reversed(analysis_history):
+                    history_list_column.controls.append(build_analysis_card(item))
+
+        refresh_history_ui()
+
+        def run_analysis_action(e):
+            symbol = symbol_dropdown.value
+            timeframe = tf_dropdown.value
+
+            write_log(f"📡 در حال دریافت داده‌ها و تحلیل {symbol} [{timeframe}]...")
+
+            current_df = fetch_live_ohlc(symbol, timeframe)
+            last_price = current_df["close"][-1]
+
+            engine = SupplyDemandEngine(symbol, timeframe)
+
+            orange_info = engine.calculate_orange_lines(current_df)
+            breakout_type, touched_top_first = engine.detect_breakout(current_df, orange_info)
+            zones = engine.calculate_zones(orange_info, touched_top_first)
+            purples = engine.find_purple_lines(current_df, orange_info)
+            monitoring_tf = engine.get_monitoring_timeframe()
+
+            record = {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "monitoring_tf": monitoring_tf,
+                "date_str": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "last_price": last_price,
+                "category": orange_info["category"],
+                "top_orange": orange_info["top_orange"],
+                "bottom_orange": orange_info["bottom_orange"],
+                "near": zones["near"],
+                "mid": zones["mid"],
+                "far": zones["far"],
+                "purple_top": purples["purple_top"],
+                "purple_bottom": purples["purple_bottom"],
+                "top_count": purples.get("top_found_count", 0),
+                "bottom_count": purples.get("bottom_found_count", 0),
+                "breakout_type": breakout_type,
+            }
+
+            analysis_history.append(record)
+            save_state()
+
+            results_list_column.controls.insert(0, build_analysis_card(record))
+            refresh_history_ui()
+
+            msg = (
+                f"📊 تحلیل جدید نماد <b>{symbol}</b> در تایم‌فریم <b>{timeframe}</b>\n\n"
+                f"💰 قیمت فعلی: <b>{last_price:.4f}</b>\n"
+                f"🏷 دسته کندل: <b>{orange_info['category']}</b>\n\n"
+                f"🟧 خط نارنجی بالا: <b>{orange_info['top_orange']:.4f}</b>\n"
+                f"🟧 خط نارنجی پایین: <b>{orange_info['bottom_orange']:.4f}</b>\n\n"
+                f"🟪 حد سود دوم (TP2): <b>{purples['purple_top']:.4f}</b>\n"
+                f"⛔ حد ضرر (SL): <b>{purples['purple_bottom']:.4f}</b>\n\n"
+                f"📉 نوع شکست: {breakout_type}\n"
+                f"⏱ زمان تحلیل: {record['date_str']}"
+            )
+
+            if saved_data.get("saved_token") and saved_data.get("saved_chat_id"):
+                success = send_telegram_message(
+                    saved_data["saved_token"],
+                    saved_data["saved_chat_id"],
+                    msg,
+                )
+                if success:
+                    write_log("📨 پیام تلگرام با موفقیت ارسال شد.")
+                else:
+                    write_log("⚠️ پیام تلگرام ارسال نشد. توکن یا Chat ID اشتباه است.", is_error=True)
+            else:
+                write_log("⚠️ تنظیمات تلگرام وارد نشده است.", is_error=True)
+
+            write_log(f"✅ تحلیل {symbol} ذخیره شد.")
+            page.update()
+
+        main_tab_content = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text("۱. انتخاب یا افزودن نماد معاملاتی", size=14, weight="bold"),
+                    ft.Row([symbol_dropdown, tf_dropdown], wrap=True),
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text("➕ افزودن نماد جدید به لیست:", size=13, color="#FFB74D"),
+                                ft.Row(
+                                    [
+                                        new_symbol_code,
+                                        new_symbol_name,
+                                        ft.ElevatedButton("ثبت نماد", on_click=add_new_symbol_action),
+                                    ],
+                                    wrap=True,
+                                ),
+                            ]
+                        ),
+                        bgcolor="#1E1E1E",
+                        padding=10,
+                        border_radius=6,
+                    ),
+                    ft.Divider(),
+                    ft.Text("۲. تنظیمات مدیریت ریسک", size=14, weight="bold"),
+                    ft.Row([risk_input, auto_trade_switch], wrap=True),
+                    ft.Row([bot_token_input, chat_id_input], wrap=True),
+                    ft.ElevatedButton("💾 ذخیره تنظیمات", on_click=lambda e: save_state()),
+                    ft.Divider(),
+                    ft.ElevatedButton(
+                        "🔍 تحلیل و محاسبه زون‌ها",
+                        on_click=run_analysis_action,
+                        bgcolor="#2E7D32",
+                        color="#FFFFFF",
+                    ),
+                    ft.Divider(),
+                    ft.Text("📊 نتیجه آخرین تحلیل:", size=15, weight="bold", color="#FFD700"),
+                    results_list_column,
+                    ft.Divider(),
+                    ft.Text("📜 لاگ عملیات:", size=13, weight="bold"),
+                    log_container,
+                ],
+                spacing=10,
+            ),
+            padding=10,
+        )
+
+        history_tab_content = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Text(
+                                "📋 آرشیو تمام تحلیل‌های انجام‌شده:",
+                                size=15,
+                                weight="bold",
+                                color="#FFD700",
+                            ),
+                            ft.ElevatedButton(
+                                "🧹 پاک‌سازی تاریخچه",
+                                on_click=lambda e: (
+                                    analysis_history.clear(),
+                                    save_state(),
+                                    refresh_history_ui(),
+                                    page.update(),
+                                ),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    history_list_column,
+                ],
+                spacing=10,
+            ),
+            padding=10,
+        )
+
+        tabs = [
+            ft.Tab(label=ft.Text("📈 تحلیل و سیگنال")),
+            ft.Tab(label=ft.Text("🗂 تاریخچه تحلیل‌ها")),
+        ]
+
+        tabs_control = ft.Tabs(
+            selected_index=0,
+            length=2,
+            expand=True,
+            content=ft.Column(
+                expand=True,
+                controls=[
+                    ft.TabBar(tabs=tabs),
+                    ft.TabBarView(
+                        expand=True,
+                        controls=[
+                            main_tab_content,
+                            history_tab_content,
+                        ],
+                    ),
+                ],
+            ),
+        )
+
+        page.add(
+            ft.Text(
+                "Mehran Trader - مدیریت عرضه و تقاضا",
+                size=18,
+                weight="bold",
+                color="#FFD700",
+            ),
+            tabs_control,
+        )
+
+    except Exception:
+        err_msg = traceback.format_exc()
+        page.clean()
+        page.add(
+            ft.Text(
+                "⚠️ خطایی در اجرا رخ داده است:",
+                color="#FF5252",
+                size=15,
+                weight="bold",
+            ),
+            ft.Text(
+                err_msg,
+                color="#FFFFFF",
+                size=11,
+                selectable=True,
+            ),
+        )
+        page.update()
+
+if __name__ == "__main__":
+    ft.app(target=main)
