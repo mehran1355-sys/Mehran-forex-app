@@ -28,11 +28,8 @@ class Candle:
 class SupplyDemandEngine:
     def __init__(self, symbol: str, timeframe: str):
         self.symbol = symbol
-        self.tf = timeframe  # "MN1", "W1", "D1"
+        self.tf = timeframe  # MN1, W1, D1
 
-    # -------------------------------
-    # انتخاب تایم‌فریم مانیتورینگ
-    # -------------------------------
     def get_monitoring_timeframe(self):
         if self.tf == "MN1":
             return "D1"
@@ -42,9 +39,6 @@ class SupplyDemandEngine:
             return "H1"
         return "H1"
 
-    # -------------------------------
-    # دسته‌بندی کندل بر اساس بدنه
-    # -------------------------------
     def classify_candle(self, last_candle: Candle, recent_bodies):
         top_two = sorted(recent_bodies, reverse=True)[:2]
         avg = sum(top_two) / 2 if top_two else last_candle.body
@@ -59,9 +53,6 @@ class SupplyDemandEngine:
         else:
             return "very_short"
 
-    # -------------------------------
-    # تشخیص سایه بلند
-    # -------------------------------
     def is_long_shadow(self, body, shadow, candle_type):
         if self.tf in ["MN1", "W1"]:
             if candle_type in ["long", "very_long"]:
@@ -75,31 +66,17 @@ class SupplyDemandEngine:
                 return shadow >= 2.5 * body
         return False
 
-    # -------------------------------
-    # محاسبه خطوط نارنجی
-    # -------------------------------
     def calculate_orange_lines(self, df_dict):
-        # df_dict: {'time': [...], 'open': [...], 'high': [...], 'low': [...], 'close': [...]}
         candles = [
             Candle(t, o, h, l, c)
             for t, o, h, l, c in zip(
                 df_dict["time"], df_dict["open"], df_dict["high"], df_dict["low"], df_dict["close"]
             )
         ]
-        if not candles:
-            raise ValueError("No candles for orange lines")
-
         last = candles[-1]
 
-        # تعداد کندلهای اخیر برای بدنه
-        if self.tf == "MN1":
-            window = 12
-        elif self.tf == "W1":
-            window = 24
-        else:
-            window = 30
-
-        recent = candles[-window:] if len(candles) >= window else candles
+        window = 12 if self.tf == "MN1" else 24 if self.tf == "W1" else 30
+        recent = candles[-window:]
         recent_bodies = [c.body for c in recent]
 
         candle_type = self.classify_candle(last, recent_bodies)
@@ -114,52 +91,33 @@ class SupplyDemandEngine:
         if candle_type == "very_long":
             if last.is_bull:
                 line1 = last.close - 0.25 * body
-                line2 = (last.high if not up_long else last.high - up_shadow * 0.5)
+                line2 = last.high if not up_long else last.high - up_shadow * 0.5
             else:
                 line1 = last.close + 0.25 * body
-                line2 = (last.low if not down_long else last.low + down_shadow * 0.5)
+                line2 = last.low if not down_long else last.low + down_shadow * 0.5
 
         elif candle_type == "long":
             if last.is_bull:
                 line1 = last.open + 0.5 * body
-                line2 = (last.high if not up_long else last.high - up_shadow * 0.5)
+                line2 = last.high if not up_long else last.high - up_shadow * 0.5
             else:
                 line1 = last.close + 0.5 * body
-                line2 = (last.low if not down_long else last.low + down_shadow * 0.5)
+                line2 = last.low if not down_long else last.low + down_shadow * 0.5
 
-        else:  # short / very_short
-            # برای کوچک‌ها و خیلی کوچک‌ها بر اساس سایه
-            if up_long:
-                line2 = last.high - up_shadow * 0.5
-            else:
-                line2 = last.high
-
-            if down_long:
-                line1 = last.low + down_shadow * 0.5
-            else:
-                line1 = last.low
+        else:
+            line2 = last.high - up_shadow * 0.5 if up_long else last.high
+            line1 = last.low + down_shadow * 0.5 if down_long else last.low
 
         top_orange = max(line1, line2)
         bottom_orange = min(line1, line2)
 
-        # دسته کندل برای نمایش
-        category_map = {
-            "very_long": "کندل خیلی بلند",
-            "long": "کندل بلند",
-            "short": "کندل کوتاه",
-            "very_short": "کندل خیلی کوتاه",
-        }
-
         return {
-            "category": category_map.get(candle_type, "نامشخص"),
+            "category": candle_type,
             "top_orange": top_orange,
             "bottom_orange": bottom_orange,
         }
 
-    # -------------------------------
-    # تقسیم منطقه احتیاط به سه بخش
-    # -------------------------------
-    def calculate_zones(self, orange_info, touched_top_first: bool):
+    def calculate_zones(self, orange_info, touched_top_first):
         top = orange_info["top_orange"]
         bottom = orange_info["bottom_orange"]
         zone_size = abs(top - bottom)
@@ -174,15 +132,8 @@ class SupplyDemandEngine:
             mid = (bottom + one_third, bottom + 2 * one_third)
             far = (bottom + 2 * one_third, top)
 
-        return {
-            "near": near,
-            "mid": mid,
-            "far": far,
-        }
+        return {"near": near, "mid": mid, "far": far}
 
-    # -------------------------------
-    # تشخیص شکست اولیه و تکمیلی
-    # -------------------------------
     def detect_breakout(self, df_dict, orange_info):
         top = orange_info["top_orange"]
         bottom = orange_info["bottom_orange"]
@@ -213,13 +164,10 @@ class SupplyDemandEngine:
                     break
 
         if touched_top_first is None:
-            touched_top_first = True  # پیش‌فرض
+            touched_top_first = True
 
         return breakout_type, touched_top_first
 
-    # -------------------------------
-    # پیدا کردن خطوط بنفش (نسخه ساده‌شده ولی مطابق منطق)
-    # -------------------------------
     def find_purple_lines(self, df_dict, orange_info):
         top = orange_info["top_orange"]
         bottom = orange_info["bottom_orange"]
@@ -234,7 +182,6 @@ class SupplyDemandEngine:
         candidates_top = []
         candidates_bottom = []
 
-        # شرط اول + مدل ساده برگشت/دفع
         for i in range(len(candles) - 2, -1, -1):
             c = candles[i]
 
@@ -242,7 +189,6 @@ class SupplyDemandEngine:
             cond_bottom = c.low < bottom and c.open > bottom
 
             if cond_top:
-                # مدل ساده برگشت: کندل بعدی حداقل 50% بدنه را برگرداند
                 if i + 1 < len(candles):
                     next_c = candles[i + 1]
                     if abs(next_c.close - next_c.open) >= 0.5 * c.body:
@@ -257,17 +203,12 @@ class SupplyDemandEngine:
             if len(candidates_top) >= 5 and len(candidates_bottom) >= 5:
                 break
 
-        purple_top = None
-        purple_bottom = None
-
-        if candidates_top:
-            purple_top = min(candidates_top, key=lambda x: abs(x - top))
-        if candidates_bottom:
-            purple_bottom = min(candidates_bottom, key=lambda x: abs(x - bottom))
+        purple_top = min(candidates_top, key=lambda x: abs(x - top)) if candidates_top else top * 1.02
+        purple_bottom = min(candidates_bottom, key=lambda x: abs(x - bottom)) if candidates_bottom else bottom * 0.98
 
         return {
-            "purple_top": purple_top if purple_top is not None else top * 1.02,
-            "purple_bottom": purple_bottom if purple_bottom is not None else bottom * 0.98,
+            "purple_top": purple_top,
+            "purple_bottom": purple_bottom,
             "top_found_count": len(candidates_top),
             "bottom_found_count": len(candidates_bottom),
         }
