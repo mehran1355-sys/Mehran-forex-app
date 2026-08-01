@@ -4,21 +4,53 @@ import json
 import os
 import traceback
 import requests
+import socket
 
 SETTINGS_FILE = "mehran_trader_settings.json"
 
-# -------------------------------
-#  اتصال به سرور FastAPI
-# -------------------------------
-API_URL = "http://10.250.30.105:8000"   # آدرس سرور تو
+
+def discover_server(port=8000):
+    try:
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        base = ".".join(local_ip.split(".")[:-1])
+
+        for i in range(1, 255):
+            test_ip = f"{base}.{i}"
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.2)
+                result = sock.connect_ex((test_ip, port))
+                sock.close()
+
+                if result == 0:
+                    print(f"Server found at: {test_ip}:{port}")
+                    return f"http://{test_ip}:{port}"
+            except:
+                pass
+
+        return None
+    except Exception as e:
+        print("Discovery Error:", e)
+        return None
+
+
+API_URL = discover_server()
+
+if API_URL is None:
+    print("❌ سرور پیدا نشد. لطفاً مطمئن شوید سرور روشن است.")
+else:
+    print("✅ سرور پیدا شد:", API_URL)
 
 
 def analyze_from_server(symbol, timeframe):
+    if API_URL is None:
+        return None
     try:
         response = requests.post(
             f"{API_URL}/analyze",
             json={"symbol": symbol, "timeframe": timeframe},
-            timeout=10
+            timeout=10,
         )
         return response.json()
     except Exception as e:
@@ -26,9 +58,6 @@ def analyze_from_server(symbol, timeframe):
         return None
 
 
-# -------------------------------
-#  ذخیره‌سازی و بارگذاری تنظیمات
-# -------------------------------
 def load_settings():
     try:
         if os.path.exists(SETTINGS_FILE):
@@ -53,9 +82,6 @@ def save_settings_to_file(data):
         return False
 
 
-# -------------------------------
-#  اپلیکیشن اصلی Flet
-# -------------------------------
 def main(page: ft.Page):
     try:
         page.title = "Mehran Trader - MT5"
@@ -75,9 +101,6 @@ def main(page: ft.Page):
         saved_risk = saved_data.get("saved_risk", "40")
         saved_auto_trade = saved_data.get("saved_auto_trade", False)
 
-        # -------------------------------
-        #  UI بخش نمادها
-        # -------------------------------
         symbol_dropdown = ft.Dropdown(
             label="انتخاب نماد معاملاتی",
             width=260,
@@ -101,9 +124,6 @@ def main(page: ft.Page):
         new_symbol_code = ft.TextField(label="کد نماد (مثلاً EURUSD)", width=180)
         new_symbol_name = ft.TextField(label="نام فارسی (مثلاً یورو/دلار)", width=220)
 
-        # -------------------------------
-        #  UI بخش تلگرام و ریسک
-        # -------------------------------
         bot_token_input = ft.TextField(
             label="Bot Token تلگرام",
             value=saved_token,
@@ -119,9 +139,6 @@ def main(page: ft.Page):
         risk_input = ft.TextField(label="سقف ریسک (%)", value=saved_risk, width=120)
         auto_trade_switch = ft.Switch(label="معامله خودکار", value=saved_auto_trade)
 
-        # -------------------------------
-        #  لاگ
-        # -------------------------------
         log_box = ft.Text(value="سیستم آماده به کار است.\n", color="#81C784", size=12)
         log_container = ft.Container(
             content=ft.Column([log_box], scroll="auto"),
@@ -151,9 +168,6 @@ def main(page: ft.Page):
             saved_data["history"] = analysis_history
             save_settings_to_file(saved_data)
 
-        # -------------------------------
-        #  افزودن نماد جدید
-        # -------------------------------
         def add_new_symbol_action(e):
             code = new_symbol_code.value.strip().upper()
             name = new_symbol_name.value.strip()
@@ -177,9 +191,6 @@ def main(page: ft.Page):
             write_log(f"✅ نماد {code} با موفقیت اضافه شد.")
             page.update()
 
-        # -------------------------------
-        #  حذف نماد
-        # -------------------------------
         def remove_symbol_action(e):
             code = symbol_dropdown.value
             if not code:
@@ -196,9 +207,6 @@ def main(page: ft.Page):
             write_log(f"🗑 نماد {code} حذف شد.")
             page.update()
 
-        # -------------------------------
-        #  ساخت کارت تحلیل
-        # -------------------------------
         def build_analysis_card(data_dict):
             return ft.Container(
                 content=ft.Column(
@@ -278,9 +286,6 @@ def main(page: ft.Page):
                 border_radius=8,
             )
 
-        # -------------------------------
-        #  تاریخچه تحلیل‌ها
-        # -------------------------------
         def refresh_history_ui():
             history_list_column.controls.clear()
             if not analysis_history:
@@ -297,15 +302,16 @@ def main(page: ft.Page):
 
         refresh_history_ui()
 
-        # -------------------------------
-        #  اجرای تحلیل از سرور
-        # -------------------------------
         def run_analysis_action(e):
             symbol = symbol_dropdown.value
             timeframe = tf_dropdown.value
 
             if not symbol:
                 write_log("⚠️ ابتدا یک نماد انتخاب کنید.", is_error=True)
+                return
+
+            if API_URL is None:
+                write_log("❌ سرور پیدا نشد. لطفاً مطمئن شوید سرور روشن است.", is_error=True)
                 return
 
             write_log(f"📡 در حال ارسال درخواست تحلیل به سرور...")
@@ -326,9 +332,6 @@ def main(page: ft.Page):
             write_log(f"✅ تحلیل {symbol} ذخیره شد.")
             page.update()
 
-        # -------------------------------
-        #  UI نهایی
-        # -------------------------------
         main_tab_content = ft.Container(
             content=ft.Column(
                 [
