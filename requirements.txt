@@ -1,4 +1,5 @@
-flet
+fastapi
+uvicorn
+MetaTrader5
+pydantic
 requests
-
-
