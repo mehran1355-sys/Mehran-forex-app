@@ -1,5 +1,2 @@
-fastapi
-uvicorn
-MetaTrader5
-pydantic
+flet
 requests
