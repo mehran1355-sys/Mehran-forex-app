@@ -1,4 +1,4 @@
-# mt5_execution.py
+# backend/mt5_execution.py
 
 from risk_manager import RiskManager
 
@@ -8,9 +8,8 @@ risk_manager = RiskManager()
 def open_trade(symbol, direction, position_size, stop_loss, take_profit_1, take_profit_2):
     """
     این تابع جای اجرای واقعی دستور MT5 است.
-    فعلاً فقط به‌صورت نمایشی نوشته شده.
+    فعلاً فقط نمایشی است؛ بعداً کد MetaTrader5 اینجا می‌آید.
     """
-    # اینجا بعداً کد واقعی MT5 (با کتابخانه MetaTrader5) اضافه می‌شود.
     print(f"باز کردن پوزیشن: {symbol} | جهت: {direction} | حجم: {position_size}")
     print(f"SL: {stop_loss} | TP1: {take_profit_1} | TP2: {take_profit_2}")
 
@@ -23,10 +22,8 @@ def open_trade_with_risk(symbol, direction, entry, stop_loss,
     اگر مجموع ریسک از حد مجاز عبور کند، نیاز به تأیید کاربر است.
     """
 
-    # تنظیم حد ریسک کاربر (مثلاً 20٪)
     risk_manager.set_user_risk_limit(user_risk_percent)
 
-    # محاسبه ریسک پوزیشن جدید
     new_risk = risk_manager.calculate_position_risk(
         entry=entry,
         stop_loss=stop_loss,
@@ -37,12 +34,11 @@ def open_trade_with_risk(symbol, direction, entry, stop_loss,
     allowed, status = risk_manager.can_open_position(new_risk)
 
     if allowed and status == "auto_allowed":
-        # اینجا باید حجم واقعی پوزیشن را بر اساس new_risk محاسبه کنی
-        # فعلاً فرض می‌کنیم position_size از قبل تعیین شده یا برابر 1 است.
-        position_size = 1
+        position_size = 1  # بعداً بر اساس new_risk و SL دقیق محاسبه می‌شود
 
         open_trade(symbol, direction, position_size, stop_loss, take_profit_1, take_profit_2)
         risk_manager.add_position(new_risk)
+
         return {
             "status": "opened_auto",
             "message": "پوزیشن به صورت خودکار باز شد.",
