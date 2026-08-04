@@ -69,4 +69,25 @@ def run_strategy_api(req: StrategyRequest):
         }
 
     # اگر اتومات اجازه دهد → معامله باز شود
-    if result
+    if result["status"] == "auto_allowed":
+        trade_result = open_trade_with_risk(
+            symbol=req.symbol,
+            direction=req.direction,
+            entry=req.entry,
+            stop_loss=req.stop_loss,
+            tp1=req.take_profit_1,
+            tp2=req.take_profit_2,
+            account_equity=req.account_equity,
+            contract_size=req.contract_size,
+            user_risk_percent=req.user_risk_percent
+        )
+
+        return {
+            "status": "opened_auto",
+            "analysis": result["analysis"],
+            "signal": result["signal"],
+            "risk": result["risk"],
+            "trade": trade_result,
+            "chart_path": result.get("chart_path"),
+            "explanation": result["explanation"]
+        }
