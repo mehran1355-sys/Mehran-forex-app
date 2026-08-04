@@ -65,3 +65,266 @@ class SupplyDemandEngine:
         elif ratio >= 0.1:
             return "short"
         else:
+            return "very_short"
+
+    def is_long_shadow(self, body, shadow, candle_type):
+        if self.tf in ["MN1", "W1"]:
+            if candle_type in ["long", "very_long"]:
+                return shadow >= body
+            else:
+                return shadow >= 2 * body
+        elif self.tf == "D1":
+            if candle_type in ["long", "very_long"]:
+                return shadow >= 1.5 * body
+            else:
+                return shadow >= 2.5 * body
+        return False
+
+    def calculate_orange_lines(self, df_dict):
+        candles = [
+            Candle(t, o, h, l, c)
+            for t, o, h, l, c in zip(
+                df_dict["time"], df_dict["open"], df_dict["high"], df_dict["low"], df_dict["close"]
+            )
+        ]
+        last = candles[-1]
+
+        window = 12 if self.tf == "MN1" else 24 if self.tf == "W1" else 30
+        recent = candles[-window:]
+        recent_bodies = [c.body for c in recent]
+
+        candle_type = self.classify_candle(last, recent_bodies)
+
+        body = last.body
+        up_shadow = last.upper_shadow
+        down_shadow = last.lower_shadow
+
+        up_long = self.is_long_shadow(body, up_shadow, candle_type)
+        down_long = self.is_long_shadow(body, down_shadow, candle_type)
+
+        if candle_type == "very_long":
+            if last.is_bull:
+                line1 = last.close - 0.25 * body
+                line2 = last.high if not up_long else last.high - up_shadow * 0.5
+            else:
+                line1 = last.close + 0.25 * body
+                line2 = last.low if not down_long else last.low + down_shadow * 0.5
+
+        elif candle_type == "long":
+            if last.is_bull:
+                line1 = last.open + 0.5 * body
+                line2 = last.high if not up_long else last.high - up_shadow * 0.5
+            else:
+                line1 = last.close + 0.5 * body
+                line2 = last.low if not down_long else last.low + down_shadow * 0.5
+
+        else:
+            line2 = last.high - up_shadow * 0.5 if up_long else last.high
+            line1 = last.low + down_shadow * 0.5 if down_long else last.low
+
+        top_orange = max(line1, line2)
+        bottom_orange = min(line1, line2)
+
+        category_map = {
+            "very_long": "کندل خیلی بلند",
+            "long": "کندل بلند",
+            "short": "کندل کوتاه",
+            "very_short": "کندل خیلی کوتاه",
+        }
+
+        return {
+            "category": category_map.get(candle_type, candle_type),
+            "top_orange": top_orange,
+            "bottom_orange": bottom_orange,
+        }
+
+    def calculate_zones(self, orange_info, touched_top_first):
+        top = orange_info["top_orange"]
+        bottom = orange_info["bottom_orange"]
+        zone_size = abs(top - bottom)
+        one_third = zone_size / 3
+
+        if touched_top_first:
+            near = (top - one_third, top)
+            mid = (top - 2 * one_third, top - one_third)
+            far = (bottom, top - 2 * one_third)
+        else:
+            near = (bottom, bottom + one_third)
+            mid = (bottom + one_third, bottom + 2 * one_third)
+            far = (bottom + 2 * one_third, top)
+
+        return {"near": near, "mid": mid, "far": far}
+
+    def detect_breakout(self, df_dict, orange_info):
+        top = orange_info["top_orange"]
+        bottom = orange_info["bottom_orange"]
+
+        candles = [
+            Candle(t, o, h, l, c)
+            for t, o, h, l, c in zip(
+                df_dict["time"], df_dict["open"], df_dict["high"], df_dict["low"], df_dict["close"]
+            )
+        ]
+
+        breakout_type = "none"
+        closes_outside = 0
+        touched_top_first = None
+
+        for c in candles:
+            if c.high >= top and touched_top_first is None:
+                touched_top_first = True
+                breakout_type = "initial"
+            if c.low <= bottom and touched_top_first is None:
+                touched_top_first = False
+                breakout_type = "initial"
+
+            if c.close > top or c.close < bottom:
+                closes_outside += 1
+                if closes_outside >= 2:
+                    breakout_type = "full"
+                    break
+
+        if touched_top_first is None:
+            touched_top_first = True
+
+        return breakout_type, touched_top_first
+
+    def find_purple_lines(self, df_dict, orange_info):
+        top = orange_info["top_orange"]
+        bottom = orange_info["bottom_orange"]
+
+        candles = [
+            Candle(t, o, h, l, c)
+            for t, o, h, l, c in zip(
+                df_dict["time"], df_dict["open"], df_dict["high"], df_dict["low"], df_dict["close"]
+            )
+        ]
+
+        candidates_top = []
+        candidates_bottom = []
+
+        for i in range(len(candles) - 2, -1, -1):
+            c = candles[i]
+
+            cond_top = c.high > top and c.open < top
+            cond_bottom = c.low < bottom and c.open > bottom
+
+            if cond_top:
+                if i + 1 < len(candles):
+                    next_c = candles[i + 1]
+                    if abs(next_c.close - next_c.open) >= 0.5 * c.body:
+                        candidates_top.append(c.high)
+
+            if cond_bottom:
+                if i + 1 < len(candles):
+                    next_c = candles[i + 1]
+                    if abs(next_c.close - next_c.open) >= 0.5 * c.body:
+                        candidates_bottom.append(c.low)
+
+            if len(candidates_top) >= 5 and len(candidates_bottom) >= 5:
+                break
+
+        purple_top = min(candidates_top, key=lambda x: abs(x - top)) if candidates_top else top * 1.02
+        purple_bottom = min(candidates_bottom, key=lambda x: abs(x - bottom)) if candidates_bottom else bottom * 0.98
+
+        return {
+            "purple_top": purple_top,
+            "purple_bottom": purple_bottom,
+            "top_found_count": len(candidates_top),
+            "bottom_found_count": len(candidates_bottom),
+        }
+
+
+# ============================
+#   Midterm Strategy Executor
+# ============================
+
+def run_midterm_forex_stock(df_dict):
+    engine = SupplyDemandEngine(symbol="FOREX_STOCK", timeframe="D1")
+
+    orange_info = engine.calculate_orange_lines(df_dict)
+    breakout_type, touched_top_first = engine.detect_breakout(df_dict, orange_info)
+    zones = engine.calculate_zones(orange_info, touched_top_first)
+    purple_info = engine.find_purple_lines(df_dict, orange_info)
+
+    return {
+        "orange": orange_info,
+        "breakout": breakout_type,
+        "zones": zones,
+        "purple": purple_info,
+    }
+
+
+# ============================
+#   Strategy Analysis Builder
+# ============================
+
+def run_strategy_analysis(analysis, symbol, timeframe, entry, stop_loss):
+    zones = analysis["zones"]
+    breakout = analysis["breakout"]
+
+    direction = "BUY" if breakout != "full" else "SELL"
+    entry_zone = zones["mid"]
+    tp1 = zones["near"][0]
+    tp2 = zones["near"][1]
+
+    rr = abs(tp1 - entry) / abs(entry - stop_loss)
+
+    return {
+        "direction": direction,
+        "entry_zone": entry_zone,
+        "stop_loss": stop_loss,
+        "take_profit_1": tp1,
+        "take_profit_2": tp2,
+        "risk_reward": rr,
+        "symbol": symbol,
+        "timeframe": timeframe
+    }
+
+
+# ============================
+#   run_strategy (FINAL)
+# ============================
+
+def run_strategy(strategy_key: str, df_dict=None, account_equity=None,
+                 contract_size=None, entry=None, stop_loss=None,
+                 symbol=None, timeframe=None):
+
+    if strategy_key == "MT_FOREX_STOCK":
+        analysis = run_midterm_forex_stock(df_dict)
+
+        signal = run_strategy_analysis(analysis, symbol, timeframe, entry, stop_loss)
+
+        new_risk = risk_manager.calculate_position_risk(
+            entry=entry,
+            stop_loss=stop_loss,
+            account_equity=account_equity,
+            contract_size=contract_size,
+        )
+
+        allowed, status = risk_manager.can_open_position(new_risk)
+
+        chart_path = generate_chart(df_dict, analysis, symbol, timeframe)
+
+        return {
+            "status": status,
+            "strategy_key": strategy_key,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "analysis": analysis,
+            "signal": signal,
+            "risk": {
+                "new_risk": new_risk,
+                "current_risk": risk_manager.current_risk,
+                "user_risk_limit": risk_manager.user_risk_limit,
+                "allowed": allowed,
+                "status": status,
+            },
+            "chart_path": chart_path,
+            "explanation": "ورود در زون میانی با رعایت حد ضرر زیر زون دور توصیه می‌شود."
+        }
+
+    return {
+        "status": "strategy_not_ready",
+        "message": f"استراتژی {strategy_key} هنوز تکمیل نشده."
+    }
