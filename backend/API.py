@@ -44,7 +44,7 @@ def run_strategy_api(req: StrategyRequest):
     signal_data["contract_size"] = req.contract_size
     signal_data["user_risk_percent"] = req.user_risk_percent
 
-    # ارسال سیگنال به تلگرام (همیشه، چه اتومات چه نیاز به تأیید)
+    # ارسال سیگنال به تلگرام (همیشه)
     send_signal_to_telegram(signal_data)
 
     # اگر نیاز به تأیید کاربر باشد
