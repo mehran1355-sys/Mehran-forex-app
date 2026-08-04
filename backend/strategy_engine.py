@@ -1,33 +1,12 @@
 from risk_manager import RiskManager
+import datetime
 
 risk_manager = RiskManager()
-def run_midterm_forex_stock(df_dict):
-    """
-    اجرای واقعی استراتژی میان‌مدت فارکس و سهام
-    با استفاده از SupplyDemandEngine
-    """
 
-    engine = SupplyDemandEngine(symbol="FOREX_STOCK", timeframe="D1")
 
-    # مرحله ۱: محاسبه خطوط نارنجی
-    orange_info = engine.calculate_orange_lines(df_dict)
-
-    # مرحله ۲: تشخیص شکست
-    breakout_type, touched_top_first = engine.detect_breakout(df_dict, orange_info)
-
-    # مرحله ۳: محاسبه زون‌ها
-    zones = engine.calculate_zones(orange_info, touched_top_first)
-
-    # مرحله ۴: خطوط بنفش
-    purple_info = engine.find_purple_lines(df_dict, orange_info)
-
-    return {
-        "orange": orange_info,
-        "breakout": breakout_type,
-        "zones": zones,
-        "purple": purple_info,
-    }
-import datetime
+# ============================
+#   Candle Class
+# ============================
 
 class Candle:
     def __init__(self, time, open_, high, low, close):
@@ -53,6 +32,10 @@ class Candle:
     def lower_shadow(self):
         return min(self.open, self.close) - self.low
 
+
+# ============================
+#   SupplyDemandEngine Class
+# ============================
 
 class SupplyDemandEngine:
     def __init__(self, symbol: str, timeframe: str):
@@ -172,101 +155,4 @@ class SupplyDemandEngine:
 
     def detect_breakout(self, df_dict, orange_info):
         top = orange_info["top_orange"]
-        bottom = orange_info["bottom_orange"]
-
-        candles = [
-            Candle(t, o, h, l, c)
-            for t, o, h, l, c in zip(
-                df_dict["time"], df_dict["open"], df_dict["high"], df_dict["low"], df_dict["close"]
-            )
-        ]
-
-        breakout_type = "none"
-        closes_outside = 0
-        touched_top_first = None
-
-        for c in candles:
-            if c.high >= top and touched_top_first is None:
-                touched_top_first = True
-                breakout_type = "initial"
-            if c.low <= bottom and touched_top_first is None:
-                touched_top_first = False
-                breakout_type = "initial"
-
-            if c.close > top or c.close < bottom:
-                closes_outside += 1
-                if closes_outside >= 2:
-                    breakout_type = "full"
-                    break
-
-        if touched_top_first is None:
-            touched_top_first = True
-
-        return breakout_type, touched_top_first
-
-    def find_purple_lines(self, df_dict, orange_info):
-        top = orange_info["top_orange"]
-        bottom = orange_info["bottom_orange"]
-
-        candles = [
-            Candle(t, o, h, l, c)
-            for t, o, h, l, c in zip(
-                df_dict["time"], df_dict["open"], df_dict["high"], df_dict["low"], df_dict["close"]
-            )
-        ]
-
-        candidates_top = []
-        candidates_bottom = []
-
-        for i in range(len(candles) - 2, -1, -1):
-            c = candles[i]
-
-            cond_top = c.high > top and c.open < top
-            cond_bottom = c.low < bottom and c.open > bottom
-
-            if cond_top:
-                if i + 1 < len(candles):
-                    next_c = candles[i + 1]
-                    if abs(next_c.close - next_c.open) >= 0.5 * c.body:
-                        candidates_top.append(c.high)
-
-            if cond_bottom:
-                if i + 1 < len(candles):
-                    next_c = candles[i + 1]
-                    if abs(next_c.close - next_c.open) >= 0.5 * c.body:
-                        candidates_bottom.append(c.low)
-
-            if len(candidates_top) >= 5 and len(candidates_bottom) >= 5:
-                break
-
-        purple_top = min(candidates_top, key=lambda x: abs(x - top)) if candidates_top else top * 1.02
-        purple_bottom = min(candidates_bottom, key=lambda x: abs(x - bottom)) if candidates_bottom else bottom * 0.98
-
-        return {
-            "purple_top": purple_top,
-            "purple_bottom": purple_bottom,
-            "top_found_count": len(candidates_top),
-            "bottom_found_count": len(candidates_bottom),
-                 }
-# strategy_engine.py
-
-def run_strategy(strategy_key: str):
-    """
-    این تابع بعداً کامل می‌شود.
-    فعلاً فقط برای تست، پیام مناسب برمی‌گرداند.
-    """
-
-    if strategy_key == "MT_FOREX_STOCK":
-        return "استراتژی میان‌مدت فارکس و سهام فعال شد."
-
-    elif strategy_key == "LT_FOREX_STOCK":
-        return "استراتژی بلندمدت فارکس و سهام فعال شد."
-
-    elif strategy_key == "SC_FOREX_STOCK":
-        return "استراتژی اسکلپ فارکس و سهام فعال شد."
-
-    elif strategy_key == "TT_FOREX_STOCK":
-        return "استراتژی تیک‌تاکی فارکس و سهام فعال شد."
-
-    # بخش‌های دیگر بعداً تکمیل می‌شوند
-    return f"استراتژی {strategy_key} تعریف شده ولی هنوز تکمیل نشده."
+        bottom = orange
