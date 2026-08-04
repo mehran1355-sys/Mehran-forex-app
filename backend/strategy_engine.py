@@ -1,3 +1,4 @@
+from chart_generator import generate_chart
 from risk_manager import RiskManager
 import datetime
 
