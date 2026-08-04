@@ -33,3 +33,13 @@ def handle_voice_command(text: str):
         return "روش یا بازار نامعتبر است. لطفاً دوباره بگو."
 
     return f"استراتژی فعال شد: {strategy_key}"
+from strategy_router import get_strategy_from_voice
+from strategy_engine import run_strategy
+
+def handle_voice_command(text: str):
+    strategy_key = get_strategy_from_voice(text)
+    if strategy_key is None:
+        return "روش یا بازار نامعتبر است. لطفاً دوباره بگو."
+
+    result = run_strategy(strategy_key)
+    return result
