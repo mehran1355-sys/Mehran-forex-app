@@ -78,3 +78,12 @@ def send_signal_to_telegram(signal_data: dict):
         requests.post(url, json=payload)
     except Exception as e:
         print("خطا در ارسال تلگرام:", e)
+def send_chart_to_telegram(image_path: str):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+    with open(image_path, "rb") as img:
+        payload = {"chat_id": CHANNEL_ID}
+        files = {"photo": img}
+        try:
+            requests.post(url, data=payload, files=files)
+        except Exception as e:
+            print("خطا در ارسال نمودار به تلگرام:", e)
