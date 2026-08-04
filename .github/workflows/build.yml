@@ -1,28 +1,39 @@
-name: Backend Check
+name: backend-check
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - master
+      - dev
+  pull_request:
 
 jobs:
   backend-check:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.10"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-    - name: Install backend dependencies
-      run: |
-        cd backend
-        pip install -r requirements.txt
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Syntax check
-      run: |
-        cd backend
-        python -m py_compile *.py
+      - name: Syntax check
+        run: |
+          cd backend
+          python -m py_compile *.py
+
+      - name: Upload backend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-files
+          path: backend/
