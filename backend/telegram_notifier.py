@@ -5,12 +5,32 @@ import requests
 BOT_TOKEN = "YOUR_BOT_TOKEN"
 CHANNEL_ID = "YOUR_CHANNEL_OR_CHAT_ID"
 
+# کش آخرین سیگنال برای استفاده در وبهوک تلگرام
+LAST_SIGNAL_CACHE = {}
+
 
 def send_signal_to_telegram(signal_data: dict):
+    """
+    ارسال سیگنال + ذخیره در کش برای دکمه‌های تأیید/لغو
+    """
+
     strategy_key = signal_data.get("strategy_key")
     analysis = signal_data.get("analysis", {})
     risk = signal_data.get("risk", {})
     signal = signal_data.get("signal", {})
+
+    # ذخیره آخرین سیگنال برای وبهوک
+    LAST_SIGNAL_CACHE.update({
+        "symbol": signal.get("symbol"),
+        "direction": signal.get("direction"),
+        "entry": signal.get("entry_zone")[0] if signal.get("entry_zone") else None,
+        "stop_loss": signal.get("stop_loss"),
+        "take_profit_1": signal.get("take_profit_1"),
+        "take_profit_2": signal.get("take_profit_2"),
+        "account_equity": signal_data.get("account_equity"),
+        "contract_size": signal_data.get("contract_size"),
+        "user_risk_percent": signal_data.get("user_risk_percent"),
+    })
 
     text_lines = []
 
