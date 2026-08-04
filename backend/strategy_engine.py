@@ -1,3 +1,29 @@
+def run_midterm_forex_stock(df_dict):
+    """
+    اجرای واقعی استراتژی میان‌مدت فارکس و سهام
+    با استفاده از SupplyDemandEngine
+    """
+
+    engine = SupplyDemandEngine(symbol="FOREX_STOCK", timeframe="D1")
+
+    # مرحله ۱: محاسبه خطوط نارنجی
+    orange_info = engine.calculate_orange_lines(df_dict)
+
+    # مرحله ۲: تشخیص شکست
+    breakout_type, touched_top_first = engine.detect_breakout(df_dict, orange_info)
+
+    # مرحله ۳: محاسبه زون‌ها
+    zones = engine.calculate_zones(orange_info, touched_top_first)
+
+    # مرحله ۴: خطوط بنفش
+    purple_info = engine.find_purple_lines(df_dict, orange_info)
+
+    return {
+        "orange": orange_info,
+        "breakout": breakout_type,
+        "zones": zones,
+        "purple": purple_info,
+    }
 import datetime
 
 class Candle:
