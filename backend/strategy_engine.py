@@ -1,3 +1,6 @@
+from risk_manager import RiskManager
+
+risk_manager = RiskManager()
 def run_midterm_forex_stock(df_dict):
     """
     اجرای واقعی استراتژی میان‌مدت فارکس و سهام
