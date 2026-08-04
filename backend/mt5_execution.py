@@ -1,16 +1,30 @@
+# backend/mt5_execution.py
+
 from risk_manager import RiskManager
 
 risk_manager = RiskManager()
 
+
 def open_trade(symbol, direction, position_size, stop_loss, tp1, tp2):
+    """
+    این تابع جای اجرای واقعی دستور MT5 است.
+    فعلاً فقط نمایشی است؛ بعداً کد MetaTrader5 اینجا می‌آید.
+    """
     print(f"پوزیشن باز شد: {symbol} | جهت: {direction} | حجم: {position_size}")
     print(f"SL: {stop_loss} | TP1: {tp1} | TP2: {tp2}")
 
+
 def open_trade_with_risk(symbol, direction, entry, stop_loss,
                          tp1, tp2, account_equity, contract_size, user_risk_percent):
+    """
+    باز کردن پوزیشن با در نظر گرفتن مدیریت ریسک.
+    اگر مجموع ریسک از حد مجاز عبور کند، نیاز به تأیید کاربر است.
+    """
 
+    # تنظیم حد ریسک کاربر (مثلاً 20٪)
     risk_manager.set_user_risk_limit(user_risk_percent)
 
+    # محاسبه ریسک پوزیشن جدید
     new_risk = risk_manager.calculate_position_risk(
         entry=entry,
         stop_loss=stop_loss,
@@ -20,8 +34,10 @@ def open_trade_with_risk(symbol, direction, entry, stop_loss,
 
     allowed, status = risk_manager.can_open_position(new_risk)
 
+    # اگر اتومات اجازه دهد → معامله باز شود
     if allowed and status == "auto_allowed":
         position_size = 1  # بعداً دقیق محاسبه می‌شود
+
         open_trade(symbol, direction, position_size, stop_loss, tp1, tp2)
         risk_manager.add_position(new_risk)
 
@@ -32,6 +48,7 @@ def open_trade_with_risk(symbol, direction, entry, stop_loss,
             "current_risk": risk_manager.current_risk
         }
 
+    # اگر نیاز به تأیید کاربر باشد
     elif status == "need_user_confirmation":
         return {
             "executed": False,
@@ -41,6 +58,7 @@ def open_trade_with_risk(symbol, direction, entry, stop_loss,
             "user_risk_limit": risk_manager.user_risk_limit
         }
 
+    # اگر حد ریسک تنظیم نشده باشد
     return {
         "executed": False,
         "error": "risk_limit_not_set"
