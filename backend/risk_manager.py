@@ -4,7 +4,7 @@ class RiskManager:
     def __init__(self):
         self.user_risk_limit = None      # درصد ریسک کاربر مثل 0.20
         self.current_risk = 0.0          # مجموع ریسک پوزیشن‌های باز
-        self.open_positions = []         # لیست پوزیشن‌های باز
+        self.open_positions = []         # لیست ریسک پوزیشن‌های باز
 
     def set_user_risk_limit(self, percent: float):
         """
@@ -15,7 +15,8 @@ class RiskManager:
 
     def calculate_position_risk(self, entry, stop_loss, account_equity, contract_size):
         """
-        محاسبه ریسک پوزیشن جدید بر اساس فاصله SL و حجم معامله.
+        محاسبه ریسک پوزیشن جدید بر اساس فاصله SL و حجم قرارداد.
+        اینجا فرض شده contract_size مقدار دلاری هر واحد حرکت است.
         """
         pip_risk = abs(entry - stop_loss)
         risk_amount = pip_risk * contract_size
