@@ -4,6 +4,7 @@ import MetaTrader5 as mt5
 import datetime
 
 from strategy_engine import SupplyDemandEngine
+from voice_module import say
 
 app = FastAPI(title="Mehran MT5 Supply/Demand Server")
 
@@ -53,11 +54,11 @@ def fetch_mt5_ohlc(symbol: str, timeframe: str, count: int = 500):
         return None
 
     df = {
-        "time": [datetime.datetime.fromtimestamp(r['time']) for r in rates],
-        "open": [r['open'] for r in rates],
-        "high": [r['high'] for r in rates],
-        "low": [r['low'] for r in rates],
-        "close": [r['close'] for r in rates],
+        "time": [datetime.datetime.fromtimestamp(r["time"]) for r in rates],
+        "open": [r["open"] for r in rates],
+        "high": [r["high"] for r in rates],
+        "low": [r["low"] for r in rates],
+        "close": [r["close"] for r in rates],
         "is_live": True,
     }
     return df
@@ -66,15 +67,13 @@ def fetch_mt5_ohlc(symbol: str, timeframe: str, count: int = 500):
 @app.on_event("startup")
 def startup_event():
     connect_mt5()
+    say("سرور تحلیل مهران تریدر به متاتریدر ۵ متصل شد.")
 
 
 @app.get("/symbols")
 def list_symbols():
     symbols = mt5.symbols_get()
-    return [
-        {"code": s.name, "description": s.description}
-        for s in symbols
-    ]
+    return [{"code": s.name, "description": s.description} for s in symbols]
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -118,4 +117,5 @@ def analyze(req: AnalyzeRequest):
         breakout_type=breakout_type,
     )
 
+    say(f"تحلیل سرور برای نماد {symbol} در تایم‌فریم {timeframe} انجام شد.")
     return record
