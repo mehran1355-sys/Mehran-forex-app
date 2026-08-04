@@ -1,4 +1,4 @@
-# risk_manager.py
+# backend/risk_manager.py
 
 class RiskManager:
     def __init__(self):
@@ -15,8 +15,8 @@ class RiskManager:
 
     def calculate_position_risk(self, entry, stop_loss, account_equity, contract_size):
         """
-        محاسبه ریسک پوزیشن جدید بر اساس فاصله SL و حجم قرارداد.
-        اینجا فرض شده contract_size مقدار دلاری هر واحد حرکت است.
+        محاسبه ریسک پوزیشن جدید بر اساس فاصله SL و مقدار قرارداد.
+        contract_size: ارزش دلاری هر واحد حرکت (مثلاً هر پیپ).
         """
         pip_risk = abs(entry - stop_loss)
         risk_amount = pip_risk * contract_size
