@@ -1,6 +1,6 @@
 flet
 requests
-MetaTrader5
+MetaTrader5; platform_system == "Windows"
 pandas
 matplotlib
 speechrecognition
