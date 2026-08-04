@@ -6,6 +6,8 @@ import traceback
 import requests
 import socket
 
+from voice_module import say, listen
+
 SETTINGS_FILE = "mehran_trader_settings.json"
 
 
@@ -39,8 +41,10 @@ API_URL = discover_server()
 
 if API_URL is None:
     print("❌ سرور پیدا نشد. لطفاً مطمئن شوید سرور روشن است.")
+    say("سرور پیدا نشد. لطفاً مطمئن شو سرور روشن است.")
 else:
     print("✅ سرور پیدا شد:", API_URL)
+    say("سرور پیدا شد و آمادهٔ کار است.")
 
 
 def analyze_from_server(symbol, timeframe):
@@ -94,7 +98,9 @@ def main(page: ft.Page):
         symbols_list = saved_data.get("symbols", [])
         analysis_history = saved_data.get("history", [])
 
-        saved_symbol = saved_data.get("saved_symbol", symbols_list[0]["code"] if symbols_list else "")
+        saved_symbol = saved_data.get(
+            "saved_symbol", symbols_list[0]["code"] if symbols_list else ""
+        )
         saved_tf = saved_data.get("saved_tf", "D1")
         saved_token = saved_data.get("saved_token", "")
         saved_chat_id = saved_data.get("saved_chat_id", "")
@@ -174,6 +180,7 @@ def main(page: ft.Page):
 
             if not code or not name:
                 write_log("⚠️ کد و نام نماد را وارد کنید.", is_error=True)
+                say("کد و نام نماد را وارد کن.")
                 return
 
             new_item = {"code": code, "name": f"{name} ({code})"}
@@ -189,12 +196,41 @@ def main(page: ft.Page):
 
             save_state()
             write_log(f"✅ نماد {code} با موفقیت اضافه شد.")
+            say(f"نماد {code} اضافه شد.")
+            page.update()
+
+        def add_symbol_by_voice(e):
+            say("کد نماد را بگو.")
+            code = listen()
+            if not code:
+                say("متوجه نشدم.")
+                return
+
+            say("نام فارسی نماد را بگو.")
+            name = listen()
+            if not name:
+                say("متوجه نشدم.")
+                return
+
+            code = code.strip().upper()
+            new_item = {"code": code, "name": f"{name} ({code})"}
+            symbols_list.append(new_item)
+
+            symbol_dropdown.options.append(
+                ft.dropdown.Option(new_item["code"], new_item["name"])
+            )
+            symbol_dropdown.value = code
+
+            save_state()
+            write_log(f"✅ نماد {code} با صدا اضافه شد.")
+            say(f"نماد {code} اضافه شد.")
             page.update()
 
         def remove_symbol_action(e):
             code = symbol_dropdown.value
             if not code:
                 write_log("⚠️ نمادی برای حذف انتخاب نشده است.", is_error=True)
+                say("هیچ نمادی برای حذف انتخاب نشده.")
                 return
 
             symbols_list[:] = [s for s in symbols_list if s["code"] != code]
@@ -205,6 +241,32 @@ def main(page: ft.Page):
 
             save_state()
             write_log(f"🗑 نماد {code} حذف شد.")
+            say(f"نماد {code} حذف شد.")
+            page.update()
+
+        def remove_symbol_by_voice(e):
+            say("کدام نماد را حذف کنم؟ کد نماد را بگو.")
+            code = listen()
+            if not code:
+                say("متوجه نشدم.")
+                return
+
+            code = code.strip().upper()
+            exists = any(s["code"] == code for s in symbols_list)
+            if not exists:
+                say("این نماد در لیست نیست.")
+                write_log(f"نماد {code} در لیست نبود.", is_error=True)
+                return
+
+            symbols_list[:] = [s for s in symbols_list if s["code"] != code]
+            symbol_dropdown.options[:] = [
+                ft.dropdown.Option(s["code"], s["name"]) for s in symbols_list
+            ]
+            symbol_dropdown.value = symbols_list[0]["code"] if symbols_list else None
+
+            save_state()
+            write_log(f"🗑 نماد {code} با صدا حذف شد.")
+            say(f"نماد {code} حذف شد.")
             page.update()
 
         def build_analysis_card(data_dict):
@@ -299,6 +361,8 @@ def main(page: ft.Page):
             else:
                 for item in reversed(analysis_history):
                     history_list_column.controls.append(build_analysis_card(item))
+            page.update()
+            say("تاریخچه تحلیل‌ها به‌روزرسانی شد.")
 
         refresh_history_ui()
 
@@ -308,18 +372,25 @@ def main(page: ft.Page):
 
             if not symbol:
                 write_log("⚠️ ابتدا یک نماد انتخاب کنید.", is_error=True)
+                say("ابتدا یک نماد انتخاب کن.")
                 return
 
             if API_URL is None:
-                write_log("❌ سرور پیدا نشد. لطفاً مطمئن شوید سرور روشن است.", is_error=True)
+                write_log(
+                    "❌ سرور پیدا نشد. لطفاً مطمئن شوید سرور روشن است.",
+                    is_error=True,
+                )
+                say("سرور پیدا نشد. لطفاً مطمئن شو سرور روشن است.")
                 return
 
-            write_log(f"📡 در حال ارسال درخواست تحلیل به سرور...")
+            write_log("📡 در حال ارسال درخواست تحلیل به سرور...")
+            say(f"در حال تحلیل نماد {symbol} در تایم‌فریم {timeframe} هستم.")
 
             result = analyze_from_server(symbol, timeframe)
 
             if result is None:
                 write_log("❌ ارتباط با سرور برقرار نشد.", is_error=True)
+                say("ارتباط با سرور برقرار نشد.")
                 return
 
             record = result
@@ -330,7 +401,31 @@ def main(page: ft.Page):
             refresh_history_ui()
 
             write_log(f"✅ تحلیل {symbol} ذخیره شد.")
+            say(f"تحلیل نماد {symbol} انجام شد.")
+            say(f"آخرین قیمت {record['last_price']:.5f} است.")
+
+            if record.get("breakout_type") == "full":
+                say("هشدار: شکست کامل رخ داده است.")
+
             page.update()
+
+        def on_risk_changed(e):
+            save_state()
+            try:
+                val = float(risk_input.value.strip())
+                say(f"سقف ریسک روی {val:.1f} درصد تنظیم شد.")
+            except:
+                say("مقدار ریسک نامعتبر است.")
+
+        def on_auto_trade_changed(e):
+            save_state()
+            if auto_trade_switch.value:
+                say("معامله خودکار فعال شد.")
+            else:
+                say("معامله خودکار غیرفعال شد.")
+
+        risk_input.on_change = on_risk_changed
+        auto_trade_switch.on_change = on_auto_trade_changed
 
         main_tab_content = ft.Container(
             content=ft.Column(
@@ -340,19 +435,39 @@ def main(page: ft.Page):
                         [
                             symbol_dropdown,
                             tf_dropdown,
-                            ft.ElevatedButton("🗑 حذف نماد انتخاب‌شده", on_click=remove_symbol_action),
+                            ft.ElevatedButton(
+                                "🗑 حذف نماد انتخاب‌شده",
+                                on_click=remove_symbol_action,
+                            ),
+                            ft.IconButton(
+                                icon=ft.icons.MIC_OFF,
+                                tooltip="حذف نماد با صدا",
+                                on_click=remove_symbol_by_voice,
+                            ),
                         ],
                         wrap=True,
                     ),
                     ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text("➕ افزودن نماد جدید به لیست:", size=13, color="#FFB74D"),
+                                ft.Text(
+                                    "➕ افزودن نماد جدید به لیست:",
+                                    size=13,
+                                    color="#FFB74D",
+                                ),
                                 ft.Row(
                                     [
                                         new_symbol_code,
                                         new_symbol_name,
-                                        ft.ElevatedButton("ثبت نماد", on_click=add_new_symbol_action),
+                                        ft.ElevatedButton(
+                                            "ثبت نماد",
+                                            on_click=add_new_symbol_action,
+                                        ),
+                                        ft.IconButton(
+                                            icon=ft.icons.MIC,
+                                            tooltip="افزودن نماد با صدا",
+                                            on_click=add_symbol_by_voice,
+                                        ),
                                     ],
                                     wrap=True,
                                 ),
@@ -366,7 +481,9 @@ def main(page: ft.Page):
                     ft.Text("۲. تنظیمات مدیریت ریسک و تلگرام", size=14, weight="bold"),
                     ft.Row([risk_input, auto_trade_switch], wrap=True),
                     ft.Row([bot_token_input, chat_id_input], wrap=True),
-                    ft.ElevatedButton("💾 ذخیره تنظیمات", on_click=lambda e: save_state()),
+                    ft.ElevatedButton(
+                        "💾 ذخیره تنظیمات", on_click=lambda e: save_state()
+                    ),
                     ft.Divider(),
                     ft.ElevatedButton(
                         "🔍 تحلیل و محاسبه زون‌ها",
@@ -375,7 +492,12 @@ def main(page: ft.Page):
                         color="#FFFFFF",
                     ),
                     ft.Divider(),
-                    ft.Text("📊 نتیجه آخرین تحلیل:", size=15, weight="bold", color="#FFD700"),
+                    ft.Text(
+                        "📊 نتیجه آخرین تحلیل:",
+                        size=15,
+                        weight="bold",
+                        color="#FFD700",
+                    ),
                     results_list_column,
                     ft.Divider(),
                     ft.Text("📜 لاگ عملیات:", size=13, weight="bold"),
@@ -449,6 +571,8 @@ def main(page: ft.Page):
             ),
             tabs_control,
         )
+
+        say("رابط کاربری مهران تریدر آمادهٔ استفاده است.")
 
     except Exception:
         err_msg = traceback.format_exc()
