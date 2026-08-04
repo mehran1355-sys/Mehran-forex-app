@@ -1,93 +1,112 @@
 # backend/api.py
 
-from fastapi import FastAPI
-from pydantic import BaseModel
-
+from fastapi import FastAPI, HTTPException
 from strategy_engine import run_strategy
-from mt5_execution import open_trade_with_risk
-from telegram_notifier import send_signal_to_telegram
+from risk_manager import RiskManager
+from chart_generator import generate_chart
+from server_registery import ServerRegistry
+from strategy_router import StrategyRouter
 
-app = FastAPI()
+app = FastAPI(title="Mehran Forex App Backend")
+
+risk_manager = RiskManager()
+server_registry = ServerRegistry()
+strategy_router = StrategyRouter()
 
 
 # ============================
-#   Request Model
+#   Root
 # ============================
 
-class StrategyRequest(BaseModel):
-    strategy_key: str
+@app.get("/")
+def root():
+    return {"status": "running", "message": "Mehran Forex Backend Active"}
+
+
+# ============================
+#   Register Device (Mobile)
+# ============================
+
+@app.post("/register_device")
+def register_device(device_id: str):
+    return {"status": "ok", "device_id": device_id}
+
+
+# ============================
+#   Register Server (Laptop)
+# ============================
+
+@app.post("/register_server")
+def register_server(server_name: str, ip: str):
+    server_registry.register(server_name, ip)
+    return {"status": "registered", "server": server_name, "ip": ip}
+
+
+@app.get("/servers")
+def list_servers():
+    return server_registry.get_all()
+
+
+# ============================
+#   Strategy Execution
+# ============================
+
+@app.post("/run_strategy")
+def run_strategy_api(
+    strategy_key: str,
+    symbol: str,
+    timeframe: str,
+    entry: float,
+    stop_loss: float,
+    account_equity: float,
+    contract_size: float,
     df_dict: dict
-    account_equity: float
-    contract_size: float
-    entry: float
-    stop_loss: float
-    take_profit_1: float
-    take_profit_2: float
-    user_risk_percent: float
-    direction: str
-    symbol: str
-    timeframe: str
-
-
-# ============================
-#   Strategy API
-# ============================
-
-@app.post("/strategy/run")
-def run_strategy_api(req: StrategyRequest):
-
-    # اجرای استراتژی
-    result = run_strategy(
-        strategy_key=req.strategy_key,
-        df_dict=req.df_dict,
-        account_equity=req.account_equity,
-        contract_size=req.contract_size,
-        entry=req.entry,
-        stop_loss=req.stop_loss,
-        symbol=req.symbol,
-        timeframe=req.timeframe
-    )
-
-    # آماده‌سازی داده برای تلگرام
-    signal_data = result.copy()
-    signal_data["account_equity"] = req.account_equity
-    signal_data["contract_size"] = req.contract_size
-    signal_data["user_risk_percent"] = req.user_risk_percent
-
-    # ارسال سیگنال به تلگرام (متن + دکمه + نمودار)
-    send_signal_to_telegram(signal_data)
-
-    # اگر نیاز به تأیید کاربر باشد
-    if result["status"] == "need_user_confirmation":
-        return {
-            "status": "need_confirmation",
-            "analysis": result["analysis"],
-            "signal": result["signal"],
-            "risk": result["risk"],
-            "chart_path": result.get("chart_path"),
-            "explanation": result["explanation"]
-        }
-
-    # اگر اتومات اجازه دهد → معامله باز شود
-    if result["status"] == "auto_allowed":
-        trade_result = open_trade_with_risk(
-            symbol=req.symbol,
-            direction=req.direction,
-            entry=req.entry,
-            stop_loss=req.stop_loss,
-            tp1=req.take_profit_1,
-            tp2=req.take_profit_2,
-            account_equity=req.account_equity,
-            contract_size=req.contract_size,
-            user_risk_percent=req.user_risk_percent
+):
+    try:
+        result = run_strategy(
+            strategy_key=strategy_key,
+            df_dict=df_dict,
+            account_equity=account_equity,
+            contract_size=contract_size,
+            entry=entry,
+            stop_loss=stop_loss,
+            symbol=symbol,
+            timeframe=timeframe
         )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-        return {
-            "status": "opened_auto",
-            "analysis": result["analysis"],
-            "signal": result["signal"],
-            "risk": result["risk"],
-            "trade": trade_result,
-            "chart_path": result.get("chart_path"),
-            "explanation": result["explanation"]
-        }
+
+# ============================
+#   Strategy Router
+# ============================
+
+@app.post("/strategy_router")
+def strategy_router_api(symbol: str, timeframe: str):
+    return strategy_router.route(symbol, timeframe)
+
+
+# ============================
+#   Risk Info
+# ============================
+
+@app.get("/risk_info")
+def risk_info():
+    return {
+        "current_risk": risk_manager.current_risk,
+        "user_risk_limit": risk_manager.user_risk_limit
+    }
+
+
+# ============================
+#   Generate Chart
+# ============================
+
+@app.post("/generate_chart")
+def generate_chart_api(symbol: str, timeframe: str, df_dict: dict):
+    try:
+        path = generate_chart(df_dict, None, symbol, timeframe)
+        return {"chart_path": path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
