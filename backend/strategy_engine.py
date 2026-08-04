@@ -65,10 +65,3 @@ class SupplyDemandEngine:
         elif ratio >= 0.1:
             return "short"
         else:
-            return "very_short"
-
-    def is_long_shadow(self, body, shadow, candle_type):
-        if self.tf in ["MN1", "W1"]:
-            if candle_type in ["long", "very_long"]:
-                return shadow >= body
-            else:
