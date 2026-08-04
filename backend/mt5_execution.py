@@ -63,3 +63,22 @@ def open_trade_with_risk(symbol, direction, entry, stop_loss,
         "executed": False,
         "error": "risk_limit_not_set"
     }
+from trade_logger import log_trade
+
+# داخل open_trade_with_risk، بعد از risk_manager.add_position(new_risk):
+
+log_trade({
+    "strategy_key": "MT_FOREX_STOCK",
+    "symbol": symbol,
+    "timeframe": "D1",
+    "direction": direction,
+    "entry": entry,
+    "stop_loss": stop_loss,
+    "take_profit_1": tp1,
+    "take_profit_2": tp2,
+    "new_risk": new_risk,
+    "current_risk": risk_manager.current_risk,
+    "user_risk_limit": risk_manager.user_risk_limit,
+    "status": status,
+    "executed": True,
+})
