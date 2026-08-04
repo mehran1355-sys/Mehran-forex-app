@@ -1,4 +1,4 @@
-# telegram_notifier.py
+# backend/telegram_notifier.py
 
 import requests
 
@@ -9,7 +9,7 @@ CHANNEL_ID = "YOUR_CHANNEL_OR_CHAT_ID"
 def send_signal_to_telegram(signal_data: dict):
     """
     ارسال سیگنال به کانال/چت تلگرام با جزئیات استراتژی و ریسک.
-    انتظار دارد signal_data ساختاری شبیه خروجی run_strategy داشته باشد.
+    انتظار دارد signal_data شبیه خروجی run_strategy باشد.
     """
 
     strategy_key = signal_data.get("strategy_key")
@@ -22,7 +22,6 @@ def send_signal_to_telegram(signal_data: dict):
     text_lines.append(f"📊 سیگنال استراتژی: {strategy_key}")
     text_lines.append("")
 
-    # اگر اطلاعات نماد و تایم‌فریم را اضافه کنی:
     symbol = signal.get("symbol", "نامشخص")
     timeframe = signal.get("timeframe", "نامشخص")
     direction = signal.get("direction", "نامشخص")
@@ -48,7 +47,6 @@ def send_signal_to_telegram(signal_data: dict):
 
     text_lines.append("")
 
-    # بخش ریسک
     if risk:
         current_risk = risk.get("current_risk", 0.0) * 100
         new_risk = risk.get("new_risk", 0.0) * 100
