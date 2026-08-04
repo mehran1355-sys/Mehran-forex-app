@@ -156,3 +156,61 @@ class SupplyDemandEngine:
     def detect_breakout(self, df_dict, orange_info):
         top = orange_info["top_orange"]
         bottom = orange
+from risk_manager import RiskManager
+
+risk_manager = RiskManager()
+
+def run_strategy(strategy_key: str, df_dict=None, account_equity=None,
+                 contract_size=None, entry=None, stop_loss=None,
+                 symbol=None, timeframe=None):
+    """
+    اجرای استراتژی + مدیریت ریسک + خروجی JSON استاندارد
+    """
+
+    if strategy_key == "MT_FOREX_STOCK":
+        analysis = run_midterm_forex_stock(df_dict)
+
+        # ساخت سیگنال اولیه (بعداً دقیق‌تر می‌شود)
+        signal = {
+            "direction": "BUY" if analysis["breakout"] != "full" else "SELL",
+            "entry_zone": analysis["zones"]["mid"],
+            "stop_loss": stop_loss,
+            "take_profit_1": analysis["zones"]["near"][0],
+            "take_profit_2": analysis["zones"]["near"][1],
+            "risk_reward": 2.5,
+            "symbol": symbol,
+            "timeframe": timeframe
+        }
+
+        # محاسبه ریسک پوزیشن جدید
+        new_risk = risk_manager.calculate_position_risk(
+            entry=entry,
+            stop_loss=stop_loss,
+            account_equity=account_equity,
+            contract_size=contract_size,
+        )
+
+        allowed, status = risk_manager.can_open_position(new_risk)
+
+        # خروجی JSON استاندارد
+        return {
+            "status": status,
+            "strategy_key": strategy_key,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "analysis": analysis,
+            "signal": signal,
+            "risk": {
+                "new_risk": new_risk,
+                "current_risk": risk_manager.current_risk,
+                "user_risk_limit": risk_manager.user_risk_limit,
+                "allowed": allowed,
+                "status": status,
+            },
+            "explanation": "ورود در زون میانی با رعایت حد ضرر زیر زون دور توصیه می‌شود."
+        }
+
+    return {
+        "status": "strategy_not_ready",
+        "message": f"استراتژی {strategy_key} هنوز تکمیل نشده."
+    }
