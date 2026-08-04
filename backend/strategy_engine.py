@@ -219,3 +219,25 @@ class SupplyDemandEngine:
             "top_found_count": len(candidates_top),
             "bottom_found_count": len(candidates_bottom),
                  }
+# strategy_engine.py
+
+def run_strategy(strategy_key: str):
+    """
+    این تابع بعداً کامل می‌شود.
+    فعلاً فقط برای تست، پیام مناسب برمی‌گرداند.
+    """
+
+    if strategy_key == "MT_FOREX_STOCK":
+        return "استراتژی میان‌مدت فارکس و سهام فعال شد."
+
+    elif strategy_key == "LT_FOREX_STOCK":
+        return "استراتژی بلندمدت فارکس و سهام فعال شد."
+
+    elif strategy_key == "SC_FOREX_STOCK":
+        return "استراتژی اسکلپ فارکس و سهام فعال شد."
+
+    elif strategy_key == "TT_FOREX_STOCK":
+        return "استراتژی تیک‌تاکی فارکس و سهام فعال شد."
+
+    # بخش‌های دیگر بعداً تکمیل می‌شوند
+    return f"استراتژی {strategy_key} تعریف شده ولی هنوز تکمیل نشده."
