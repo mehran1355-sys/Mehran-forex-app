@@ -29,14 +29,16 @@ jobs:
 
       - name: Get Flutter packages
         run: |
+          cd mobile_app
           flutter pub get
 
       - name: Build APK (Debug)
         run: |
+          cd mobile_app
           flutter build apk --debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: mehran_trader_app_debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: mobile_app/build/app/outputs/flutter-apk/app-debug.apk
