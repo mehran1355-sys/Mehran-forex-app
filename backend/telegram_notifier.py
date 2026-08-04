@@ -1,5 +1,3 @@
-# backend/telegram_notifier.py
-
 import requests
 
 BOT_TOKEN = "YOUR_BOT_TOKEN"
@@ -7,15 +5,10 @@ CHANNEL_ID = "YOUR_CHANNEL_OR_CHAT_ID"
 
 
 def send_signal_to_telegram(signal_data: dict):
-    """
-    ارسال سیگنال به کانال/چت تلگرام با جزئیات استراتژی و ریسک.
-    انتظار دارد signal_data شبیه خروجی run_strategy باشد.
-    """
-
     strategy_key = signal_data.get("strategy_key")
     analysis = signal_data.get("analysis", {})
     risk = signal_data.get("risk", {})
-    signal = analysis.get("signal", {}) if "signal" in analysis else {}
+    signal = signal_data.get("signal", {})
 
     text_lines = []
 
@@ -60,14 +53,28 @@ def send_signal_to_telegram(signal_data: dict):
 
     text = "\n".join(text_lines)
 
+    # اگر نیاز به تأیید کاربر باشد، دکمه‌ها را اضافه کن
+    reply_markup = None
+    if risk.get("status") == "need_user_confirmation":
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "✔️ باز کردن پوزیشن", "callback_data": "CONFIRM_OPEN"},
+                    {"text": "❌ لغو پوزیشن", "callback_data": "CANCEL_OPEN"},
+                ]
+            ]
+        }
+
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHANNEL_ID,
         "text": text,
         "parse_mode": "HTML",
     }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
 
     try:
-        requests.post(url, data=payload)
+        requests.post(url, json=payload)
     except Exception as e:
         print("خطا در ارسال تلگرام:", e)
