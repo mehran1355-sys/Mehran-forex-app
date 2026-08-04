@@ -1,64 +1,28 @@
-name: Build Android APK
+name: Backend Check
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
-  build:
+  backend-check:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Detect Flutter project folder
-      id: detect
-      run: |
-        echo "🔍 در حال جستجوی فولدر Flutter..."
-        FLUTTER_DIR=""
-        # جستجو برای pubspec.yaml
-        for d in $(find . -type f -name "pubspec.yaml"); do
-          FLUTTER_DIR=$(dirname "$d")
-        done
-
-        if [ -z "$FLUTTER_DIR" ]; then
-          echo "❌ هیچ پروژه Flutter پیدا نشد."
-          exit 1
-        fi
-
-        echo "📁 فولدر Flutter پیدا شد: $FLUTTER_DIR"
-        echo "FLUTTER_DIR=$FLUTTER_DIR" >> $GITHUB_ENV
-
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
 
-    - name: Install Python dependencies
+    - name: Install backend dependencies
       run: |
-        pip install --upgrade pip
-        pip install flet requests
+        cd backend
+        pip install -r requirements.txt
 
-    - name: Set up Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: "3.24.0"
-
-    - name: Flutter pub get
+    - name: Syntax check
       run: |
-        cd $FLUTTER_DIR
-        flutter pub get
-
-    - name: Build APK
-      run: |
-        cd $FLUTTER_DIR
-        flutter build apk --release
-
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: MehranTrader-APK
-        path: $FLUTTER_DIR/build/app/outputs/flutter-apk/app-release.apk
+        cd backend
+        python -m py_compile *.py
