@@ -1,2 +1,7 @@
 flet
 requests
+MetaTrader5
+pandas
+matplotlib
+speechrecognition
+pyttsx3
