@@ -1,3 +1,5 @@
+# backend/telegram_notifier.py
+
 import requests
 
 BOT_TOKEN = "YOUR_BOT_TOKEN"
@@ -53,7 +55,6 @@ def send_signal_to_telegram(signal_data: dict):
 
     text = "\n".join(text_lines)
 
-    # اگر نیاز به تأیید کاربر باشد، دکمه‌ها را اضافه کن
     reply_markup = None
     if risk.get("status") == "need_user_confirmation":
         reply_markup = {
@@ -78,6 +79,8 @@ def send_signal_to_telegram(signal_data: dict):
         requests.post(url, json=payload)
     except Exception as e:
         print("خطا در ارسال تلگرام:", e)
+
+
 def send_chart_to_telegram(image_path: str):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
     with open(image_path, "rb") as img:
