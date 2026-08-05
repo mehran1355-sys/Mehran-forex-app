@@ -146,3 +146,6 @@ def failover(primary_server: str):
         return {"chart_path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@app.get("/balanced_server")
+def balanced_server():
+    return server_registry.get_balanced_server()
