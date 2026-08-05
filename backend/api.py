@@ -30,27 +30,15 @@ voice = VoiceAlert()
 error_monitor = ErrorMonitor()
 
 
-# ============================
-#   Root
-# ============================
-
 @app.get("/")
 def root():
     return {"status": "running", "message": "Mehran Forex Backend Active"}
 
 
-# ============================
-#   Register Device (Mobile)
-# ============================
-
 @app.post("/register_device")
 def register_device(device_id: str):
     return {"status": "ok", "device_id": device_id}
 
-
-# ============================
-#   Register Server (Laptop)
-# ============================
 
 @app.post("/register_server")
 def register_server(server_name: str, ip: str):
@@ -63,28 +51,16 @@ def list_servers():
     return server_registry.get_all()
 
 
-# ============================
-#   Heartbeat
-# ============================
-
 @app.post("/server_heartbeat")
 def server_heartbeat(server_name: str):
     server_registry.heartbeat(server_name)
     return {"status": "alive", "server": server_name}
 
 
-# ============================
-#   Server Status
-# ============================
-
 @app.get("/server_status")
 def server_status():
     return server_registry.get_all()
 
-
-# ============================
-#   Best Server
-# ============================
 
 @app.get("/best_server")
 def best_server():
@@ -94,27 +70,15 @@ def best_server():
     return best
 
 
-# ============================
-#   Failover
-# ============================
-
 @app.get("/failover")
 def failover(primary_server: str):
     return server_registry.get_failover_server(primary_server)
 
 
-# ============================
-#   Load Balancing
-# ============================
-
 @app.get("/balanced_server")
 def balanced_server():
     return server_registry.get_balanced_server()
 
-
-# ============================
-#   Health Check
-# ============================
 
 @app.post("/server_health")
 def server_health(server_name: str, cpu: float, ram: float, mt5: bool, latency: float):
@@ -125,10 +89,6 @@ def server_health(server_name: str, cpu: float, ram: float, mt5: bool, latency: 
 def best_health_server():
     return server_registry.get_best_health_server()
 
-
-# ============================
-#   Strategy Execution
-# ============================
 
 @app.post("/run_strategy")
 def run_strategy_api(
@@ -163,18 +123,10 @@ def run_strategy_api(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============================
-#   Strategy Router
-# ============================
-
 @app.post("/strategy_router")
 def strategy_router_api(symbol: str, timeframe: str):
     return strategy_router.route(symbol, timeframe)
 
-
-# ============================
-#   Risk Info
-# ============================
 
 @app.get("/risk_info")
 def risk_info():
@@ -183,10 +135,6 @@ def risk_info():
         "user_risk_limit": risk_manager.user_risk_limit
     }
 
-
-# ============================
-#   Generate Chart
-# ============================
 
 @app.post("/generate_chart")
 def generate_chart_api(symbol: str, timeframe: str, df_dict: dict):
@@ -202,10 +150,6 @@ def generate_chart_api(symbol: str, timeframe: str, df_dict: dict):
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ============================
-#   Trade Execution
-# ============================
 
 @app.post("/execute_trade")
 def execute_trade(
@@ -275,26 +219,14 @@ def execute_trade(
     return result
 
 
-# ============================
-#   Trade Logs
-# ============================
-
 @app.get("/trade_logs")
 def trade_logs():
     return trade_logger.get_logs()
 
 
-# ============================
-#   Error Logs
-# ============================
-
 @app.get("/errors")
 def errors():
     return error_monitor.get_errors()
 
-
-# ============================
-#   Telegram Webhook
-# ============================
 
 app.mount("/telegram", telegram_webhook_app)
