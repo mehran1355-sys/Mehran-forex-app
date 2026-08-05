@@ -13,31 +13,24 @@ telegram = TelegramNotifier()
 async def telegram_webhook(request: Request):
     data = await request.json()
 
-    # آیا callback query وجود دارد؟
     if "callback_query" not in data:
         return {"status": "ignored"}
 
     callback = data["callback_query"]
-    user_choice = callback["data"]  # CONFIRM_OPEN یا CANCEL_OPEN
+    user_choice = callback["data"]
 
-    chat_id = callback["message"]["chat"]["id"]
-    message_id = callback["message"]["message_id"]
-
-    # آخرین سیگنال ذخیره شده
     signal = LAST_SIGNAL_CACHE.copy()
 
     if not signal:
         telegram.send("❗ هیچ سیگنالی برای اجرا وجود ندارد.")
         return {"status": "no_signal"}
 
-    # اگر کاربر تأیید کرد
     if user_choice == "CONFIRM_OPEN":
         telegram.send("✔️ کاربر تأیید کرد: پوزیشن باز می‌شود.")
 
-        # ساخت payload معامله
         payload = {
             "symbol": signal["symbol"],
-            "volume": 0.1,  # بعداً از مدیریت ریسک می‌گیریم
+            "volume": 0.1,
             "order_type": "buy" if signal["direction"] == "buy" else "sell",
             "entry": signal["entry"],
             "stop_loss": signal["stop_loss"],
@@ -45,7 +38,6 @@ async def telegram_webhook(request: Request):
             "strategy_key": "telegram_confirmed"
         }
 
-        # ارسال به API اصلی برای اجرای معامله
         try:
             response = requests.post("http://127.0.0.1:8000/execute_trade", json=payload)
             result = response.json()
@@ -53,7 +45,6 @@ async def telegram_webhook(request: Request):
         except Exception as e:
             telegram.send(f"❌ خطا در اجرای معامله: {e}")
 
-    # اگر کاربر لغو کرد
     elif user_choice == "CANCEL_OPEN":
         telegram.send("❌ کاربر پوزیشن را لغو کرد.")
 
