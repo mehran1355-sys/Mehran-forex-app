@@ -1,5 +1,5 @@
 # backend/api.py
-
+from voice_alert import VoiceAlert
 from fastapi import FastAPI, HTTPException
 import requests
 
@@ -232,3 +232,4 @@ def execute_trade(
         "stop_loss": stop_loss,
         "take_profit": take_profit,
         "strategy_key": strategy_key,
+voice = VoiceAlert()
