@@ -40,3 +40,31 @@ class ServerRegistry:
         for name, info in active.items():
             return {"server": name, "ip": info["ip"]}
         return None
+def get_failover_server(self, primary_server: str):
+        """اگر سرور اصلی آفلاین شد، سرور بعدی را انتخاب می‌کند"""
+        self.check_offline()
+
+        # اگر سرور اصلی آنلاین است → همان را برگردان
+        if primary_server in self.servers:
+            if self.servers[primary_server]["status"] == "online":
+                return {
+                    "server": primary_server,
+                    "ip": self.servers[primary_server]["ip"],
+                    "failover": False
+                }
+
+        # اگر سرور اصلی آفلاین بود → سرور بعدی را انتخاب کن
+        active_servers = self.get_active_servers()
+
+        if not active_servers:
+            return {"status": "no_active_server"}
+
+        # انتخاب اولین سرور آنلاین به عنوان failover
+        for name, info in active_servers.items():
+            return {
+                "server": name,
+                "ip": info["ip"],
+                "failover": True
+            }
+
+        return {"status": "no_active_server"}
