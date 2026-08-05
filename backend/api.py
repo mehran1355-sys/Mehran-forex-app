@@ -1,5 +1,5 @@
 # backend/api.py
-
+from telegram_notifier import TelegramNotifier
 from fastapi import FastAPI, HTTPException
 import requests
 
