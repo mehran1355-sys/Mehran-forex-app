@@ -68,3 +68,30 @@ def get_failover_server(self, primary_server: str):
             }
 
         return {"status": "no_active_server"}
+    def get_balanced_server(self):
+        """انتخاب سرور به صورت Load Balancing (Round-Robin)"""
+
+        self.check_offline()
+        active = self.get_active_servers()
+
+        if not active:
+            return {"status": "no_active_server"}
+
+        # تبدیل دیکشنری به لیست
+        active_list = list(active.items())
+
+        # اگر قبلاً سروری انتخاب نشده، اولین سرور را انتخاب کن
+        if not hasattr(self, "lb_index"):
+            self.lb_index = 0
+
+        # انتخاب سرور بر اساس lb_index
+        name, info = active_list[self.lb_index]
+
+        # برو به سرور بعدی
+        self.lb_index = (self.lb_index + 1) % len(active_list)
+
+        return {
+            "server": name,
+            "ip": info["ip"],
+            "load_balancing": True
+        }
