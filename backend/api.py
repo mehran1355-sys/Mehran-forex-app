@@ -1,5 +1,5 @@
 # backend/api.py
-
+from telegram_webhook import app as telegram_webhook_app
 from fastapi import FastAPI, HTTPException
 import requests
 
@@ -99,3 +99,4 @@ def best_server():
 
 @app.get("/failover")
 def failover(primary
+from telegram_webhook import app as telegram_webhook_app
