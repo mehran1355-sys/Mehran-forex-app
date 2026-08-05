@@ -23,7 +23,12 @@ class ServerRegistry:
         for name, info in self.servers.items():
             if now - info["last_seen"] > timeout_seconds:
                 info["status"] = "offline"
-
+from voice_alert import VoiceAlert
+voice = VoiceAlert()
+voice.create_alert(
+    text=f"سرور {name} آفلاین شد.",
+    filename=f"{name}_offline.mp3"
+)
     def get_all(self):
         self.check_offline()
         return self.servers
