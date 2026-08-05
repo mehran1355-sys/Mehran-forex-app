@@ -149,3 +149,10 @@ def failover(primary_server: str):
 @app.get("/balanced_server")
 def balanced_server():
     return server_registry.get_balanced_server()
+@app.post("/server_health")
+def server_health(server_name: str, cpu: float, ram: float, mt5: bool, latency: float):
+    return server_registry.update_health(server_name, cpu, ram, mt5, latency)
+
+@app.get("/best_health_server")
+def best_health_server():
+    return server_registry.get_best_health_server()
