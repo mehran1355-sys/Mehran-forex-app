@@ -199,6 +199,10 @@ def execute_trade(
     take_profit: float,
     strategy_key: str
 ):
+    voice.create_alert(
+    text=f"معامله روی نماد {symbol} با موفقیت اجرا شد.",
+    filename="trade_executed.mp3"
+    )
     # انتخاب بهترین سرور بر اساس سلامت
     best = server_registry.get_best_health_server()
 
