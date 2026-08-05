@@ -1,55 +1,87 @@
 # backend/server_registery.py
 
 import time
+from telegram_notifier import notify_server_offline
+from voice_alert import VoiceAlert
 
 class ServerRegistry:
     def __init__(self):
-        self.servers = {}
+        self.servers = {}  # { server_name: {ip, status, last_seen, health} }
+        self.lb_index = 0
+        self.voice = VoiceAlert()
+
+    # ============================
+    #   ثبت سرور
+    # ============================
 
     def register(self, server_name: str, ip: str):
         self.servers[server_name] = {
             "ip": ip,
+            "status": "online",
             "last_seen": time.time(),
-            "status": "online"
+            "health": None
         }
+
+    # ============================
+    #   Heartbeat
+    # ============================
 
     def heartbeat(self, server_name: str):
         if server_name in self.servers:
             self.servers[server_name]["last_seen"] = time.time()
             self.servers[server_name]["status"] = "online"
 
-    def check_offline(self, timeout_seconds=15):
+    # ============================
+    #   چک کردن سرورهای آفلاین
+    # ============================
+
+    def check_offline(self):
         now = time.time()
+        timeout_seconds = 10
+
         for name, info in self.servers.items():
             if now - info["last_seen"] > timeout_seconds:
-                info["status"] = "offline"
-from voice_alert import VoiceAlert
-voice = VoiceAlert()
-voice.create_alert(
-    text=f"سرور {name} آفلاین شد.",
-    filename=f"{name}_offline.mp3"
-)
+                if info["status"] != "offline":
+                    info["status"] = "offline"
+
+                    # هشدار تلگرام
+                    notify_server_offline(name)
+
+                    # هشدار صوتی
+                    self.voice.create_alert(
+                        text=f"سرور {name} آفلاین شد.",
+                        filename=f"{name}_offline.mp3"
+                    )
+
+    # ============================
+    #   گرفتن همه سرورها
+    # ============================
+
     def get_all(self):
         self.check_offline()
         return self.servers
 
-    def get_active_servers(self):
-        self.check_offline()
-        return {
-            name: info for name, info in self.servers.items()
-            if info["status"] == "online"
-        }
+    # ============================
+    #   بهترین سرور (ساده)
+    # ============================
 
     def get_best_server(self):
-        active = self.get_active_servers()
-        for name, info in active.items():
-            return {"server": name, "ip": info["ip"]}
-        return None
-def get_failover_server(self, primary_server: str):
-        """اگر سرور اصلی آفلاین شد، سرور بعدی را انتخاب می‌کند"""
         self.check_offline()
 
-        # اگر سرور اصلی آنلاین است → همان را برگردان
+        for name, info in self.servers.items():
+            if info["status"] == "online":
+                return {"server": name, "ip": info["ip"]}
+
+        return None
+
+    # ============================
+    #   Failover
+    # ============================
+
+    def get_failover_server(self, primary_server: str):
+        self.check_offline()
+
+        # اگر سرور اصلی آنلاین است
         if primary_server in self.servers:
             if self.servers[primary_server]["status"] == "online":
                 return {
@@ -58,14 +90,13 @@ def get_failover_server(self, primary_server: str):
                     "failover": False
                 }
 
-        # اگر سرور اصلی آفلاین بود → سرور بعدی را انتخاب کن
-        active_servers = self.get_active_servers()
+        # اگر آفلاین بود → سرور بعدی
+        active = self.get_active_servers()
 
-        if not active_servers:
+        if not active:
             return {"status": "no_active_server"}
 
-        # انتخاب اولین سرور آنلاین به عنوان failover
-        for name, info in active_servers.items():
+        for name, info in active.items():
             return {
                 "server": name,
                 "ip": info["ip"],
@@ -73,26 +104,25 @@ def get_failover_server(self, primary_server: str):
             }
 
         return {"status": "no_active_server"}
-    def get_balanced_server(self):
-        """انتخاب سرور به صورت Load Balancing (Round-Robin)"""
 
+    # ============================
+    #   Load Balancing
+    # ============================
+
+    def get_active_servers(self):
         self.check_offline()
+        return {name: info for name, info in self.servers.items() if info["status"] == "online"}
+
+    def get_balanced_server(self):
         active = self.get_active_servers()
 
         if not active:
             return {"status": "no_active_server"}
 
-        # تبدیل دیکشنری به لیست
         active_list = list(active.items())
 
-        # اگر قبلاً سروری انتخاب نشده، اولین سرور را انتخاب کن
-        if not hasattr(self, "lb_index"):
-            self.lb_index = 0
-
-        # انتخاب سرور بر اساس lb_index
         name, info = active_list[self.lb_index]
 
-        # برو به سرور بعدی
         self.lb_index = (self.lb_index + 1) % len(active_list)
 
         return {
@@ -100,77 +130,34 @@ def get_failover_server(self, primary_server: str):
             "ip": info["ip"],
             "load_balancing": True
         }
-def update_health(self, server_name: str, cpu: float, ram: float, mt5: bool, latency: float):
-        """آپدیت وضعیت سلامت سرور"""
 
+    # ============================
+    #   Health Check
+    # ============================
+
+    def update_health(self, server_name: str, cpu: float, ram: float, mt5: bool, latency: float):
         if server_name not in self.servers:
             return {"status": "server_not_registered"}
+
+        score = self.calculate_score(cpu, ram, mt5, latency)
 
         self.servers[server_name]["health"] = {
             "cpu": cpu,
             "ram": ram,
             "mt5": mt5,
             "latency": latency,
-            "score": self.calculate_score(cpu, ram, mt5, latency)
+            "score": score
         }
 
-        # آپدیت زمان آخرین اتصال
         self.servers[server_name]["last_seen"] = time.time()
         self.servers[server_name]["status"] = "online"
 
-        return {"status": "updated", "server": server_name}
+        return {"status": "updated", "score": score}
 
     def calculate_score(self, cpu, ram, mt5, latency):
-        """محاسبه امتیاز سلامت سرور"""
-
         score = 100
 
-        # CPU
-        if cpu > 80:
-            score -= 30
-        elif cpu > 60:
-            score -= 15
+        if cpu > 80: score -= 30
+        elif cpu > 60: score -= 15
 
-        # RAM
-        if ram > 80:
-            score -= 30
-        elif ram > 60:
-            score -= 15
-
-        # MT5
-        if not mt5:
-            score -= 40
-
-        # Latency
-        if latency > 300:
-            score -= 20
-        elif latency > 150:
-            score -= 10
-
-        return max(score, 0)
-
-    def get_best_health_server(self):
-        """انتخاب بهترین سرور بر اساس سلامت"""
-
-        self.check_offline()
-
-        best_server = None
-        best_score = -1
-
-        for name, info in self.servers.items():
-            if info["status"] == "online" and "health" in info:
-                score = info["health"]["score"]
-                if score > best_score:
-                    best_score = score
-                    best_server = {"server": name, "ip": info["ip"], "score": score}
-
-        if best_server is None:
-            return {"status": "no_active_server"}
-
-        return best_server
-if info["status"] == "online" and now - info["last_seen"] > timeout_seconds:
-    info["status"] = "offline"
-    # ارسال هشدار تلگرام
-    from telegram_notifier import TelegramNotifier
-    telegram = TelegramNotifier("YOUR_BOT_TOKEN", "YOUR_CHAT_ID")
-    telegram.send(f"⚠️ Server Offline: {name}")
+        if ram > 80: score -=
