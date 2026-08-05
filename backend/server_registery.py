@@ -163,3 +163,9 @@ def update_health(self, server_name: str, cpu: float, ram: float, mt5: bool, lat
             return {"status": "no_active_server"}
 
         return best_server
+if info["status"] == "online" and now - info["last_seen"] > timeout_seconds:
+    info["status"] = "offline"
+    # ارسال هشدار تلگرام
+    from telegram_notifier import TelegramNotifier
+    telegram = TelegramNotifier("YOUR_BOT_TOKEN", "YOUR_CHAT_ID")
+    telegram.send(f"⚠️ Server Offline: {name}")
