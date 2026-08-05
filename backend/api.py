@@ -16,6 +16,7 @@ from telegram_notifier import (
 )
 from voice_alert import VoiceAlert
 from error_monitor import ErrorMonitor
+from telegram_webhook import app as telegram_webhook_app
 
 
 app = FastAPI(title="Mehran Forex App Backend")
@@ -98,4 +99,103 @@ def best_server():
 # ============================
 
 @app.get("/failover")
-def failover(primary
+def failover(primary_server: str):
+    return server_registry.get_failover_server(primary_server)
+
+
+# ============================
+#   Load Balancing
+# ============================
+
+@app.get("/balanced_server")
+def balanced_server():
+    return server_registry.get_balanced_server()
+
+
+# ============================
+#   Health Check
+# ============================
+
+@app.post("/server_health")
+def server_health(server_name: str, cpu: float, ram: float, mt5: bool, latency: float):
+    return server_registry.update_health(server_name, cpu, ram, mt5, latency)
+
+
+@app.get("/best_health_server")
+def best_health_server():
+    return server_registry.get_best_health_server()
+
+
+# ============================
+#   Strategy Execution
+# ============================
+
+@app.post("/run_strategy")
+def run_strategy_api(
+    strategy_key: str,
+    symbol: str,
+    timeframe: str,
+    entry: float,
+    stop_loss: float,
+    account_equity: float,
+    contract_size: float,
+    df_dict: dict
+):
+    try:
+        result = run_strategy(
+            strategy_key=strategy_key,
+            df_dict=df_dict,
+            account_equity=account_equity,
+            contract_size=contract_size,
+            entry=entry,
+            stop_loss=stop_loss,
+            symbol=symbol,
+            timeframe=timeframe
+        )
+        return result
+
+    except Exception as e:
+        error_monitor.log_error(
+            source="run_strategy_api",
+            message=str(e),
+            extra={"strategy_key": strategy_key, "symbol": symbol, "timeframe": timeframe}
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================
+#   Strategy Router
+# ============================
+
+@app.post("/strategy_router")
+def strategy_router_api(symbol: str, timeframe: str):
+    return strategy_router.route(symbol, timeframe)
+
+
+# ============================
+#   Risk Info
+# ============================
+
+@app.get("/risk_info")
+def risk_info():
+    return {
+        "current_risk": risk_manager.current_risk,
+        "user_risk_limit": risk_manager.user_risk_limit
+    }
+
+
+# ============================
+#   Generate Chart
+# ============================
+
+@app.post("/generate_chart")
+def generate_chart_api(symbol: str, timeframe: str, df_dict: dict):
+    try:
+        path = generate_chart(df_dict, None, symbol, timeframe)
+        return {"chart_path": path}
+
+    except Exception as e:
+        error_monitor.log_error(
+            source="generate_chart_api",
+            message=str(e),
+            extra
