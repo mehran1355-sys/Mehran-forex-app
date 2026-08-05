@@ -1,60 +1,60 @@
 # backend/telegram_webhook.py
 
 from fastapi import FastAPI, Request
-from mt5_execution import open_trade_with_risk
+from telegram_notifier import LAST_SIGNAL_CACHE
+from telegram_notifier import TelegramNotifier
+import requests
 
 app = FastAPI()
-
-# این مقادیر را بعداً داینامیک از دیتابیس/حافظه می‌گیریم
-LAST_SIGNAL_CACHE = {
-    "symbol": None,
-    "direction": None,
-    "entry": None,
-    "stop_loss": None,
-    "take_profit_1": None,
-    "take_profit_2": None,
-    "account_equity": None,
-    "contract_size": None,
-    "user_risk_percent": None,
-}
+telegram = TelegramNotifier()
 
 
-@app.post("/telegram/webhook")
+@app.post("/telegram_webhook")
 async def telegram_webhook(request: Request):
     data = await request.json()
 
-    if "callback_query" in data:
-        callback = data["callback_query"]
-        chat_id = callback["message"]["chat"]["id"]
-        data_value = callback["data"]
+    # آیا callback query وجود دارد؟
+    if "callback_query" not in data:
+        return {"status": "ignored"}
 
-        if data_value == "CONFIRM_OPEN":
-            trade_result = open_trade_with_risk(
-                symbol=LAST_SIGNAL_CACHE["symbol"],
-                direction=LAST_SIGNAL_CACHE["direction"],
-                entry=LAST_SIGNAL_CACHE["entry"],
-                stop_loss=LAST_SIGNAL_CACHE["stop_loss"],
-                tp1=LAST_SIGNAL_CACHE["take_profit_1"],
-                tp2=LAST_SIGNAL_CACHE["take_profit_2"],
-                account_equity=LAST_SIGNAL_CACHE["account_equity"],
-                contract_size=LAST_SIGNAL_CACHE["contract_size"],
-                user_risk_percent=LAST_SIGNAL_CACHE["user_risk_percent"],
-            )
+    callback = data["callback_query"]
+    user_choice = callback["data"]  # CONFIRM_OPEN یا CANCEL_OPEN
 
-            text = "✅ پوزیشن بر اساس تأیید شما باز شد."
-        elif data_value == "CANCEL_OPEN":
-            text = "❌ پوزیشن بر اساس تصمیم شما باز نشد."
-        else:
-            text = "دستور نامشخص."
+    chat_id = callback["message"]["chat"]["id"]
+    message_id = callback["message"]["message_id"]
 
-        # پاسخ به تلگرام
-        import requests
-        BOT_TOKEN = "YOUR_BOT_TOKEN"
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    # آخرین سیگنال ذخیره شده
+    signal = LAST_SIGNAL_CACHE.copy()
+
+    if not signal:
+        telegram.send("❗ هیچ سیگنالی برای اجرا وجود ندارد.")
+        return {"status": "no_signal"}
+
+    # اگر کاربر تأیید کرد
+    if user_choice == "CONFIRM_OPEN":
+        telegram.send("✔️ کاربر تأیید کرد: پوزیشن باز می‌شود.")
+
+        # ساخت payload معامله
         payload = {
-            "chat_id": chat_id,
-            "text": text,
+            "symbol": signal["symbol"],
+            "volume": 0.1,  # بعداً از مدیریت ریسک می‌گیریم
+            "order_type": "buy" if signal["direction"] == "buy" else "sell",
+            "entry": signal["entry"],
+            "stop_loss": signal["stop_loss"],
+            "take_profit": signal["take_profit_1"],
+            "strategy_key": "telegram_confirmed"
         }
-        requests.post(url, json=payload)
 
-    return {"ok": True}
+        # ارسال به API اصلی برای اجرای معامله
+        try:
+            response = requests.post("http://127.0.0.1:8000/execute_trade", json=payload)
+            result = response.json()
+            telegram.send(f"نتیجه اجرای معامله:\n{result}")
+        except Exception as e:
+            telegram.send(f"❌ خطا در اجرای معامله: {e}")
+
+    # اگر کاربر لغو کرد
+    elif user_choice == "CANCEL_OPEN":
+        telegram.send("❌ کاربر پوزیشن را لغو کرد.")
+
+    return {"status": "ok"}
