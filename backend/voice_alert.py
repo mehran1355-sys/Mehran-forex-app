@@ -1,7 +1,7 @@
 # backend/voice_alert.py
 
 import os
-from gtts import gTTS
+from gTTS import gTTS
 
 class VoiceAlert:
     def __init__(self, folder="voice_alerts"):
