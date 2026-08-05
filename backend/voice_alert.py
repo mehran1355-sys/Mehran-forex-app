@@ -10,7 +10,6 @@ class VoiceAlert:
             os.makedirs(folder)
 
     def create_alert(self, text: str, filename: str):
-        """ساخت فایل صوتی از متن"""
         try:
             tts = gTTS(text=text, lang="fa")
             path = os.path.join(self.folder, filename)
