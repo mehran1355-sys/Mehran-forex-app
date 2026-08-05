@@ -1,5 +1,5 @@
 # backend/api.py
-from telegram_notifier import TelegramNotifier
+
 from fastapi import FastAPI, HTTPException
 import requests
 
@@ -9,7 +9,11 @@ from chart_generator import generate_chart
 from server_registery import ServerRegistry
 from strategy_router import StrategyRouter
 from trade_logger import TradeLogger
-
+from telegram_notifier import (
+    TelegramNotifier,
+    notify_trade_execution,
+    notify_server_offline
+)
 
 app = FastAPI(title="Mehran Forex App Backend")
 
@@ -17,6 +21,7 @@ risk_manager = RiskManager()
 server_registry = ServerRegistry()
 strategy_router = StrategyRouter()
 trade_logger = TradeLogger()
+telegram = TelegramNotifier()
 
 
 # ============================
@@ -53,7 +58,7 @@ def list_servers():
 
 
 # ============================
-#   (2) Server Heartbeat
+#   Heartbeat
 # ============================
 
 @app.post("/server_heartbeat")
@@ -63,7 +68,7 @@ def server_heartbeat(server_name: str):
 
 
 # ============================
-#   (3) Server Status
+#   Server Status
 # ============================
 
 @app.get("/server_status")
@@ -72,7 +77,7 @@ def server_status():
 
 
 # ============================
-#   (4) Best Server
+#   Best Server
 # ============================
 
 @app.get("/best_server")
@@ -84,7 +89,7 @@ def best_server():
 
 
 # ============================
-#   Failover System
+#   Failover
 # ============================
 
 @app.get("/failover")
@@ -102,7 +107,7 @@ def balanced_server():
 
 
 # ============================
-#   Health Check System
+#   Health Check
 # ============================
 
 @app.post("/server_health")
@@ -181,7 +186,7 @@ def generate_chart_api(symbol: str, timeframe: str, df_dict: dict):
 
 
 # ============================
-#   Trade Execution (Backend → Server → MT5)
+#   Trade Execution
 # ============================
 
 @app.post("/execute_trade")
@@ -218,7 +223,7 @@ def execute_trade(
     except Exception as e:
         return {"status": "failed", "reason": str(e)}
 
-    # ثبت معامله در Trade Logger
+    # ثبت معامله
     trade_logger.log_trade({
         "symbol": symbol,
         "volume": volume,
@@ -227,17 +232,3 @@ def execute_trade(
         "stop_loss": stop_loss,
         "take_profit": take_profit,
         "strategy_key": strategy_key,
-        "server_ip": server_ip,
-        "result": result
-    })
-
-    return result
-
-
-# ============================
-#   Trade Logs
-# ============================
-
-@app.get("/trade_logs")
-def trade_logs():
-    return trade_logger.get_logs()
