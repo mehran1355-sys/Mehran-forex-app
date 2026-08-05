@@ -48,6 +48,37 @@ def list_servers():
 
 
 # ============================
+#   (2) Server Heartbeat
+# ============================
+
+@app.post("/server_heartbeat")
+def server_heartbeat(server_name: str):
+    server_registry.heartbeat(server_name)
+    return {"status": "alive", "server": server_name}
+
+
+# ============================
+#   (3) Server Status
+# ============================
+
+@app.get("/server_status")
+def server_status():
+    return server_registry.get_all()
+
+
+# ============================
+#   (4) Best Server
+# ============================
+
+@app.get("/best_server")
+def best_server():
+    best = server_registry.get_best_server()
+    if best is None:
+        return {"status": "no_active_server"}
+    return best
+
+
+# ============================
 #   Strategy Execution
 # ============================
 
@@ -76,10 +107,7 @@ def run_strategy_api(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@app.post("/server_heartbeat")
-def server_heartbeat(server_name: str):
-    server_registry.heartbeat(server_name)
-    return {"status": "alive", "server": server_name}
+
 
 # ============================
 #   Strategy Router
