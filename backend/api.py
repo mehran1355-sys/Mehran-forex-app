@@ -1,4 +1,5 @@
 # backend/api.py
+from error_monitor import ErrorMonitor
 from voice_alert import VoiceAlert
 from fastapi import FastAPI, HTTPException
 import requests
@@ -237,3 +238,4 @@ def execute_trade(
         "take_profit": take_profit,
         "strategy_key": strategy_key,
 voice = VoiceAlert()
+error_monitor = ErrorMonitor()
