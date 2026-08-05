@@ -1,17 +1,22 @@
 # backend/api.py
 
 from fastapi import FastAPI, HTTPException
+import requests
+
 from strategy_engine import run_strategy
 from risk_manager import RiskManager
 from chart_generator import generate_chart
 from server_registery import ServerRegistry
 from strategy_router import StrategyRouter
+from trade_logger import TradeLogger
+
 
 app = FastAPI(title="Mehran Forex App Backend")
 
 risk_manager = RiskManager()
 server_registry = ServerRegistry()
 strategy_router = StrategyRouter()
+trade_logger = TradeLogger()
 
 
 # ============================
@@ -79,6 +84,38 @@ def best_server():
 
 
 # ============================
+#   Failover System
+# ============================
+
+@app.get("/failover")
+def failover(primary_server: str):
+    return server_registry.get_failover_server(primary_server)
+
+
+# ============================
+#   Load Balancing
+# ============================
+
+@app.get("/balanced_server")
+def balanced_server():
+    return server_registry.get_balanced_server()
+
+
+# ============================
+#   Health Check System
+# ============================
+
+@app.post("/server_health")
+def server_health(server_name: str, cpu: float, ram: float, mt5: bool, latency: float):
+    return server_registry.update_health(server_name, cpu, ram, mt5, latency)
+
+
+@app.get("/best_health_server")
+def best_health_server():
+    return server_registry.get_best_health_server()
+
+
+# ============================
 #   Strategy Execution
 # ============================
 
@@ -105,8 +142,7 @@ def run_strategy_api(
             timeframe=timeframe
         )
         return result
-    except Exception as e: 
-    
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -139,23 +175,15 @@ def risk_info():
 def generate_chart_api(symbol: str, timeframe: str, df_dict: dict):
     try:
         path = generate_chart(df_dict, None, symbol, timeframe)
-        @app.get("/failover")
-def failover(primary_server: str):
-    result = server_registry.get_failover_server(primary_server)
-    return result
         return {"chart_path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@app.get("/balanced_server")
-def balanced_server():
-    return server_registry.get_balanced_server()
-@app.post("/server_health")
-def server_health(server_name: str, cpu: float, ram: float, mt5: bool, latency: float):
-    return server_registry.update_health(server_name, cpu, ram, mt5, latency)
 
-@app.get("/best_health_server")
-def best_health_server():
-    return server_registry.get_best_health_server()
+
+# ============================
+#   Trade Execution (Backend → Server → MT5)
+# ============================
+
 @app.post("/execute_trade")
 def execute_trade(
     symbol: str,
@@ -174,7 +202,6 @@ def execute_trade(
 
     server_ip = best["ip"]
 
-    # ساخت payload برای ارسال به سرور
     payload = {
         "symbol": symbol,
         "volume": volume,
@@ -185,10 +212,32 @@ def execute_trade(
         "strategy_key": strategy_key
     }
 
-    # ارسال درخواست به سرور انتخاب‌شده
-    import requests
     try:
         response = requests.post(f"http://{server_ip}:8000/mt5_execute", json=payload)
-        return response.json()
+        result = response.json()
     except Exception as e:
         return {"status": "failed", "reason": str(e)}
+
+    # ثبت معامله در Trade Logger
+    trade_logger.log_trade({
+        "symbol": symbol,
+        "volume": volume,
+        "order_type": order_type,
+        "entry": entry,
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
+        "strategy_key": strategy_key,
+        "server_ip": server_ip,
+        "result": result
+    })
+
+    return result
+
+
+# ============================
+#   Trade Logs
+# ============================
+
+@app.get("/trade_logs")
+def trade_logs():
+    return trade_logger.get_logs()
