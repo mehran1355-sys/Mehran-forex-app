@@ -105,7 +105,7 @@ def run_strategy_api(
             timeframe=timeframe
         )
         return result
-    except Exception as e:
+    except Exception as e: 
     
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -156,3 +156,39 @@ def server_health(server_name: str, cpu: float, ram: float, mt5: bool, latency: 
 @app.get("/best_health_server")
 def best_health_server():
     return server_registry.get_best_health_server()
+@app.post("/execute_trade")
+def execute_trade(
+    symbol: str,
+    volume: float,
+    order_type: str,
+    entry: float,
+    stop_loss: float,
+    take_profit: float,
+    strategy_key: str
+):
+    # انتخاب بهترین سرور بر اساس سلامت
+    best = server_registry.get_best_health_server()
+
+    if "status" in best and best["status"] == "no_active_server":
+        return {"status": "failed", "reason": "no_active_server"}
+
+    server_ip = best["ip"]
+
+    # ساخت payload برای ارسال به سرور
+    payload = {
+        "symbol": symbol,
+        "volume": volume,
+        "order_type": order_type,
+        "entry": entry,
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
+        "strategy_key": strategy_key
+    }
+
+    # ارسال درخواست به سرور انتخاب‌شده
+    import requests
+    try:
+        response = requests.post(f"http://{server_ip}:8000/mt5_execute", json=payload)
+        return response.json()
+    except Exception as e:
+        return {"status": "failed", "reason": str(e)}
