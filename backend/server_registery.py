@@ -95,3 +95,71 @@ def get_failover_server(self, primary_server: str):
             "ip": info["ip"],
             "load_balancing": True
         }
+def update_health(self, server_name: str, cpu: float, ram: float, mt5: bool, latency: float):
+        """آپدیت وضعیت سلامت سرور"""
+
+        if server_name not in self.servers:
+            return {"status": "server_not_registered"}
+
+        self.servers[server_name]["health"] = {
+            "cpu": cpu,
+            "ram": ram,
+            "mt5": mt5,
+            "latency": latency,
+            "score": self.calculate_score(cpu, ram, mt5, latency)
+        }
+
+        # آپدیت زمان آخرین اتصال
+        self.servers[server_name]["last_seen"] = time.time()
+        self.servers[server_name]["status"] = "online"
+
+        return {"status": "updated", "server": server_name}
+
+    def calculate_score(self, cpu, ram, mt5, latency):
+        """محاسبه امتیاز سلامت سرور"""
+
+        score = 100
+
+        # CPU
+        if cpu > 80:
+            score -= 30
+        elif cpu > 60:
+            score -= 15
+
+        # RAM
+        if ram > 80:
+            score -= 30
+        elif ram > 60:
+            score -= 15
+
+        # MT5
+        if not mt5:
+            score -= 40
+
+        # Latency
+        if latency > 300:
+            score -= 20
+        elif latency > 150:
+            score -= 10
+
+        return max(score, 0)
+
+    def get_best_health_server(self):
+        """انتخاب بهترین سرور بر اساس سلامت"""
+
+        self.check_offline()
+
+        best_server = None
+        best_score = -1
+
+        for name, info in self.servers.items():
+            if info["status"] == "online" and "health" in info:
+                score = info["health"]["score"]
+                if score > best_score:
+                    best_score = score
+                    best_server = {"server": name, "ip": info["ip"], "score": score}
+
+        if best_server is None:
+            return {"status": "no_active_server"}
+
+        return best_server
