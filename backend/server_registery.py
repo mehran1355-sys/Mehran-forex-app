@@ -81,7 +81,6 @@ class ServerRegistry:
     def get_failover_server(self, primary_server: str):
         self.check_offline()
 
-        # اگر سرور اصلی آنلاین است
         if primary_server in self.servers:
             if self.servers[primary_server]["status"] == "online":
                 return {
@@ -90,7 +89,6 @@ class ServerRegistry:
                     "failover": False
                 }
 
-        # اگر آفلاین بود → سرور بعدی
         active = self.get_active_servers()
 
         if not active:
@@ -160,4 +158,38 @@ class ServerRegistry:
         if cpu > 80: score -= 30
         elif cpu > 60: score -= 15
 
-        if ram > 80: score -=
+        if ram > 80: score -= 30
+        elif ram > 60: score -= 15
+
+        if not mt5: score -= 40
+
+        if latency > 300: score -= 20
+        elif latency > 150: score -= 10
+
+        return max(score, 0)
+
+    # ============================
+    #   بهترین سرور بر اساس سلامت
+    # ============================
+
+    def get_best_health_server(self):
+        self.check_offline()
+
+        best_server = None
+        best_score = -1
+
+        for name, info in self.servers.items():
+            if info["status"] == "online" and info["health"]:
+                score = info["health"]["score"]
+                if score > best_score:
+                    best_score = score
+                    best_server = {
+                        "server": name,
+                        "ip": info["ip"],
+                        "score": score
+                    }
+
+        if best_server is None:
+            return {"status": "no_active_server"}
+
+        return best_server
