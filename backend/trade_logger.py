@@ -55,3 +55,7 @@ def log_trade(trade_data: dict):
         if not file_exists:
             writer.writerow(headers)
         writer.writerow(row)
+telegram = TelegramNotifier(
+    bot_token="YOUR_BOT_TOKEN",
+    chat_id="YOUR_CHAT_ID"
+)
