@@ -198,4 +198,103 @@ def generate_chart_api(symbol: str, timeframe: str, df_dict: dict):
         error_monitor.log_error(
             source="generate_chart_api",
             message=str(e),
-            extra
+            extra={"symbol": symbol, "timeframe": timeframe}
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================
+#   Trade Execution
+# ============================
+
+@app.post("/execute_trade")
+def execute_trade(
+    symbol: str,
+    volume: float,
+    order_type: str,
+    entry: float,
+    stop_loss: float,
+    take_profit: float,
+    strategy_key: str
+):
+    best = server_registry.get_best_health_server()
+
+    if "status" in best and best["status"] == "no_active_server":
+        return {"status": "failed", "reason": "no_active_server"}
+
+    server_ip = best["ip"]
+
+    payload = {
+        "symbol": symbol,
+        "volume": volume,
+        "order_type": order_type,
+        "entry": entry,
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
+        "strategy_key": strategy_key
+    }
+
+    try:
+        response = requests.post(f"http://{server_ip}:8000/mt5_execute", json=payload)
+        result = response.json()
+
+    except Exception as e:
+        error_monitor.log_error(
+            source="execute_trade",
+            message=str(e),
+            extra={"server_ip": server_ip, "symbol": symbol}
+        )
+        return {"status": "failed", "reason": str(e)}
+
+    trade_logger.log_trade({
+        "symbol": symbol,
+        "volume": volume,
+        "order_type": order_type,
+        "entry": entry,
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
+        "strategy_key": strategy_key,
+        "server_ip": server_ip,
+        "result": result
+    })
+
+    notify_trade_execution({
+        "symbol": symbol,
+        "order_type": order_type,
+        "entry": entry,
+        "stop_loss": stop_loss,
+        "take_profit": take_profit,
+        "server_ip": server_ip
+    })
+
+    voice.create_alert(
+        text=f"معامله روی نماد {symbol} با موفقیت اجرا شد.",
+        filename="trade_executed.mp3"
+    )
+
+    return result
+
+
+# ============================
+#   Trade Logs
+# ============================
+
+@app.get("/trade_logs")
+def trade_logs():
+    return trade_logger.get_logs()
+
+
+# ============================
+#   Error Logs
+# ============================
+
+@app.get("/errors")
+def errors():
+    return error_monitor.get_errors()
+
+
+# ============================
+#   Telegram Webhook
+# ============================
+
+app.mount("/telegram", telegram_webhook_app)
