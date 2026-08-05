@@ -106,6 +106,7 @@ def run_strategy_api(
         )
         return result
     except Exception as e:
+    
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -138,6 +139,10 @@ def risk_info():
 def generate_chart_api(symbol: str, timeframe: str, df_dict: dict):
     try:
         path = generate_chart(df_dict, None, symbol, timeframe)
+        @app.get("/failover")
+def failover(primary_server: str):
+    result = server_registry.get_failover_server(primary_server)
+    return result
         return {"chart_path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
