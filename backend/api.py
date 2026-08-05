@@ -76,7 +76,10 @@ def run_strategy_api(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+@app.post("/server_heartbeat")
+def server_heartbeat(server_name: str):
+    server_registry.heartbeat(server_name)
+    return {"status": "alive", "server": server_name}
 
 # ============================
 #   Strategy Router
